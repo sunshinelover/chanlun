@@ -1,0 +1,10 @@
+[
+    {
+        "name": "double ema",
+        "className": "DoubleEmaDemo",
+        "vtSymbol": "IF1612"
+    },{
+        "name": "talib doublesma",
+        "className": "TalibDoubleSmaDemo",
+        "vtSymbol": "IF1612"
+    }]
