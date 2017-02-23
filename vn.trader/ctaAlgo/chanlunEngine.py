@@ -356,7 +356,7 @@ class ChanlunEngine(object):
 
         # ----------------------------------------------------------------------
 
-    def writeCtaLog(self, content):
+    def writeChanlunLog(self, content):
         """快速发出CTA模块日志事件"""
         log = VtLogData()
         log.logContent = content

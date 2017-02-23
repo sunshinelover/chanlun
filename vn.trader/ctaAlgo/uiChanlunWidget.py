@@ -74,41 +74,44 @@ class ChanlunStrategyManager(QtGui.QGroupBox):
     # ----------------------------------------------------------------------
     def initUi(self):
         """初始化界面"""
-        self.setTitle(self.name)
+        # self.setTitle(self.name)
+        #
+        # self.paramMonitor = ChanlunValueMonitor(self)
+        # self.varMonitor = ChanlunValueMonitor(self)
+        #
+        # maxHeight = 60
+        # self.paramMonitor.setMaximumHeight(maxHeight)
+        # self.varMonitor.setMaximumHeight(maxHeight)
+        #
+        # buttonInit = QtGui.QPushButton(u'初始化')
+        # buttonStart = QtGui.QPushButton(u'启动')
+        # buttonStop = QtGui.QPushButton(u'停止')
+        # buttonInit.clicked.connect(self.init)
+        # buttonStart.clicked.connect(self.start)
+        # buttonStop.clicked.connect(self.stop)
+        #
+        # hbox1 = QtGui.QHBoxLayout()
+        # hbox1.addWidget(buttonInit)
+        # hbox1.addWidget(buttonStart)
+        # hbox1.addWidget(buttonStop)
+        # hbox1.addStretch()
+        #
+        # hbox2 = QtGui.QHBoxLayout()
+        # hbox2.addWidget(self.paramMonitor)
+        #
+        # hbox3 = QtGui.QHBoxLayout()
+        # hbox3.addWidget(self.varMonitor)
+        #
+        # vbox = QtGui.QVBoxLayout()
+        # vbox.addLayout(hbox1)
+        # vbox.addLayout(hbox2)
+        # vbox.addLayout(hbox3)
+        #
+        # self.setLayout(vbox)
 
-        self.paramMonitor = ChanlunValueMonitor(self)
-        self.varMonitor = ChanlunValueMonitor(self)
 
-        maxHeight = 60
-        self.paramMonitor.setMaximumHeight(maxHeight)
-        self.varMonitor.setMaximumHeight(maxHeight)
-
-        buttonInit = QtGui.QPushButton(u'初始化')
-        buttonStart = QtGui.QPushButton(u'启动')
-        buttonStop = QtGui.QPushButton(u'停止')
-        buttonInit.clicked.connect(self.init)
-        buttonStart.clicked.connect(self.start)
-        buttonStop.clicked.connect(self.stop)
-
-        hbox1 = QtGui.QHBoxLayout()
-        hbox1.addWidget(buttonInit)
-        hbox1.addWidget(buttonStart)
-        hbox1.addWidget(buttonStop)
-        hbox1.addStretch()
-
-        hbox2 = QtGui.QHBoxLayout()
-        hbox2.addWidget(self.paramMonitor)
-
-        hbox3 = QtGui.QHBoxLayout()
-        hbox3.addWidget(self.varMonitor)
-
-        vbox = QtGui.QVBoxLayout()
-        vbox.addLayout(hbox1)
-        vbox.addLayout(hbox2)
-        vbox.addLayout(hbox3)
-
-        self.setLayout(vbox)
-
+        self.setLayout(hbox)
+        self.show()
     # ----------------------------------------------------------------------
     def updateMonitor(self, event=None):
         """显示策略最新状态"""
@@ -162,7 +165,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.registerEvent()
 
         # 记录日志
-    #    self.chanlunEngine.writeChanlunLog(u'chanlun引擎启动成功')
+        self.chanlunEngine.writeChanlunLog(u'缠论引擎启动成功')
 
         # ----------------------------------------------------------------------
 
@@ -188,8 +191,8 @@ class ChanlunEngineManager(QtGui.QWidget):
         stopAllButton.clicked.connect(self.stopAll)
 
         # 滚动区域，放置所有的ChanlunStrategyManager
-        self.scrollArea = QtGui.QScrollArea()
-        self.scrollArea.setWidgetResizable(True)
+        # self.scrollArea = QtGui.QScrollArea()
+        # self.scrollArea.setWidgetResizable(True)
 
         # Chanlun组件的日志监控
         self.chanlunLogMonitor = QtGui.QTextEdit()
@@ -204,9 +207,38 @@ class ChanlunEngineManager(QtGui.QWidget):
         hbox2.addWidget(stopAllButton)
         hbox2.addStretch()
 
+
+        okButton = QtGui.QPushButton("OK")
+        oneMButton = QtGui.QPushButton(u"1分")
+        fiveMButton = QtGui.QPushButton(u'5分')
+        fifteenMButton = QtGui.QPushButton(u'15分')
+        thirtyMButton = QtGui.QPushButton(u'30分')
+        dayButton = QtGui.QPushButton(u'日')
+        weekButton = QtGui.QPushButton(u'周')
+        monthButton = QtGui.QPushButton(u'月')
+
+        vbox1 = QtGui.QVBoxLayout()
+
+        vbox2 = QtGui.QVBoxLayout()
+        # vbox1.addWidget(okButton)
+        vbox2.addWidget(oneMButton)
+        vbox2.addWidget(fiveMButton)
+        vbox2.addWidget(fifteenMButton)
+        vbox2.addWidget(thirtyMButton)
+        vbox2.addWidget(dayButton)
+        vbox2.addWidget(weekButton)
+        vbox2.addWidget(monthButton)
+        vbox2.addStretch()
+
+        hbox3 = QtGui.QHBoxLayout()
+        hbox3.addStretch()
+        hbox3.addLayout(vbox1)
+        hbox3.addLayout(vbox2)
+
         vbox = QtGui.QVBoxLayout()
         vbox.addLayout(hbox2)
-        vbox.addWidget(self.scrollArea)
+        vbox.addLayout(hbox3)
+        #vbox.addWidget(self.scrollArea)
         vbox.addWidget(self.chanlunLogMonitor)
         self.setLayout(vbox)
 
@@ -252,7 +284,7 @@ class ChanlunEngineManager(QtGui.QWidget):
             self.chanlunEngine.loadSetting()
             self.initStrategyManager()
             self.strategyLoaded = True
-         #   self.chanlunEngine.writeChanlunLog(u'策略加载成功')
+            self.chanlunEngine.writeChanlunLog(u'缠论策略加载成功')
 
     # ----------------------------------------------------------------------
     def updateChanlunLog(self, event):
