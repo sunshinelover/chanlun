@@ -179,6 +179,9 @@ class ChanlunEngineManager(QtGui.QWidget):
         # startAllButton = QtGui.QPushButton(u'全部启动')
         # stopAllButton = QtGui.QPushButton(u'全部停止')
 
+        #期货代码输入框
+        codeEdit = QtGui.QLineEdit()
+
         # 按钮
         loadButton = QtGui.QPushButton(u'分笔')
         initAllButton = QtGui.QPushButton(u'分段')
@@ -201,6 +204,7 @@ class ChanlunEngineManager(QtGui.QWidget):
 
         # 设置布局
         hbox2 = QtGui.QHBoxLayout()
+        hbox2.addWidget(codeEdit)
         hbox2.addWidget(loadButton)
         hbox2.addWidget(initAllButton)
         hbox2.addWidget(startAllButton)
