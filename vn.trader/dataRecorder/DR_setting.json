@@ -1,5 +1,5 @@
 {
-    "working": false,
+    "working": true,
 
     "tick":
     [
@@ -9,6 +9,7 @@
         ["IH1606", "SGIT"],
         ["IC1606", "SGIT"],
         ["IC1606", "SGIT"],
+        ["ag1706", "CTP"],
         ["600036", "LTS", "SZSE"],
         ["EUR.USD", "IB", "IDEALPRO", "USD", "外汇"]
     ],
@@ -20,7 +21,8 @@
         ["IH1606", "SGIT"],
         ["IH1606", "SGIT"],
         ["IC1606", "SGIT"],
-        ["IC1606", "SGIT"]
+        ["IC1606", "SGIT"],
+        ["ag1706", "CTP"]
     ],
 
     "active":

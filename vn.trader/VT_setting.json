@@ -2,7 +2,7 @@
 	"fontFamily": "微软雅黑",
 	"fontSize": 12,
 
-	"mongoHost": "localhost",
+	"mongoHost": "192.168.0.107",
 	"mongoPort": 27017,
 
 	"darkStyle": true

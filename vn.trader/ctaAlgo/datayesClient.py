@@ -61,16 +61,18 @@ class DatayesClient(object):
         else:
             url = '/'.join([self.domain, self.version, path])
             r = requests.get(url=url, headers=self.header, params=params)
+            print u'开始下载数据'
             
             if r.status_code != HTTP_OK:
                 print u'%shttp请求失败，状态代码%s' %(self.name, r.status_code)
                 return None
             else:
                 result = r.json()
-                if 'retMsg' in result and result['retMsg'] == 'Success':
-                    return result['data']
+                print u'通联数据接口返回值: ', result
+                if 'retCode' in result and result['retMsg'] == 'Success':
+                    return result['data'][0]['barBodys']
                 else:
-                    if 'retMsg' in result:
+                    if 'retCode' in result:
                         print u'%s查询失败，返回信息%s' %(self.name, result['retMsg'])
                     elif 'message' in result:
                         print u'%s查询失败，返回信息%s' %(self.name, result['message'])
