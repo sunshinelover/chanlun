@@ -918,6 +918,7 @@ class TradingWidget(QtGui.QFrame):
             self.labelAskPrice1.setText(str(tick.askPrice1))
             self.labelBidVolume1.setText(str(tick.bidVolume1))
             self.labelAskVolume1.setText(str(tick.askVolume1))
+
             
             if tick.bidPrice2:
                 self.labelBidPrice2.setText(str(tick.bidPrice2))
