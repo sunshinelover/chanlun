@@ -16,6 +16,8 @@ from vtConstant import *
 from vtFunction import loadMongoSetting
 from datayesClient import DatayesClient
 
+import json
+
 
 # 以下为vn.trader和通联数据规定的交易所代码映射 
 VT_TO_DATAYES_EXCHANGE = {}
@@ -182,7 +184,7 @@ class HistoryDataEngine(object):
         print u'所有期货的主力合约日行情已经全部下载完成, 耗时%s秒' % (time() - start)
 
     # ----------------------------------------------------------------------
-    def downloadFuturesIntradayBar(self, symbol):
+    def downloadFuturesIntradayBar(self, symbol, unit):
         """下载期货的日内分钟行情"""
         print u'开始下载%s日内分钟行情' % symbol
 
@@ -191,15 +193,32 @@ class HistoryDataEngine(object):
 
         params = {}
         params['instrumentID'] = symbol
-        params['unit'] = 1
+        params['unit'] = unit
 
         data = self.datayesClient.downloadData(path, params)
+        print u"datayesClient返回值: ", data
 
         if data:
             today = datetime.now().strftime('%Y%m%d')
 
+            #给数据库命名
+            dbname = ''
+            if unit == 1:
+                dbname = MINUTE_DB_NAME
+            elif unit == 5:
+                dbname = MINUTE5_DB_NAME
+            elif unit == 15:
+                dbname = MINUTE15_DB_NAME
+            elif unit == 30:
+                dbname = MINUTE30_DB_NAME
+            elif unit == 60:
+                dbname = MINUTE60_DB_NAME
+            else:
+                print u'分钟值错误'
+
+
             # 创建datetime索引
-            self.dbClient[MINUTE_DB_NAME][symbol].ensure_index([('datetime', pymongo.ASCENDING)],
+            self.dbClient[dbname][symbol].ensure_index([('datetime', pymongo.ASCENDING)],
                                                                unique=True)
 
             for d in data:
@@ -207,21 +226,21 @@ class HistoryDataEngine(object):
                 bar.vtSymbol = symbol
                 bar.symbol = symbol
                 try:
-                    bar.exchange = DATAYES_TO_VT_EXCHANGE.get(d.get('exchangeCD', ''), '')
+                    bar.exchange = ''
                     bar.open = d.get('openPrice', 0)
-                    bar.high = d.get('highestPrice', 0)
-                    bar.low = d.get('lowestPrice', 0)
+                    bar.high = d.get('highPrice', 0)
+                    bar.low = d.get('lowPrice', 0)
                     bar.close = d.get('closePrice', 0)
                     bar.date = today
                     bar.time = d.get('barTime', '')
                     bar.datetime = datetime.strptime(bar.date + ' ' + bar.time, '%Y%m%d %H:%M')
-                    bar.volume = d.get('totalVolume', 0)
-                    bar.openInterest = 0
+                    bar.volume = d.get('totalValue', 0)
+                    bar.openInterest = d.get('openInterest', 0)
                 except KeyError:
                     print d
 
                 flt = {'datetime': bar.datetime}
-                self.dbClient[MINUTE_DB_NAME][symbol].update_one(flt, {'$set': bar.__dict__}, upsert=True)
+                self.dbClient[dbname][symbol].update_one(flt, {'$set': bar.__dict__}, upsert=True)
 
             print u'%s下载完成' % symbol
         else:
@@ -357,7 +376,10 @@ if __name__ == '__main__':
 
     e = HistoryDataEngine()
     sleep(1)
-    e.downloadEquityDailyBar('000001')
+    e.downloadFuturesIntradayBar('bu1706', 5)
+    # e.downloadEquityDailyBar('bu1703')
+    # e.downloadFuturesSymbol()
+    # e.downloadAllFuturesDailyBar()
 
     # 这里将项目中包含的股指日内分钟线csv导入MongoDB，作者电脑耗时大约3分钟
     # loadMcCsv('IF0000_1min.csv', MINUTE_DB_NAME, 'IF0000')
