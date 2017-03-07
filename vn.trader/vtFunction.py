@@ -35,8 +35,10 @@ def loadMongoSetting():
         setting = json.load(f)
         host = setting['mongoHost']
         port = setting['mongoPort']
+        print u'读取成功'
     except:
-        host = 'localhost'
+        print u'读取错误'
+        host = '192.168.0.107'
         port = 27017
         
     return host, port
