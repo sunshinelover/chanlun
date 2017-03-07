@@ -118,7 +118,7 @@ class HistoryDataEngine(object):
             params['contractObject'] = symbol.replace('0000', '')
             params['mainCon'] = 1
             if last:
-                params['startDate'] = last['date']
+                params['beginDate'] = last['date']
         # 交易合约
         else:
             path = 'api/market/getMktFutd.json'
@@ -126,15 +126,14 @@ class HistoryDataEngine(object):
             params = {}
             params['ticker'] = symbol
             if last:
-                params['startDate'] = last['date']
+                params['beginDate'] = last['date']
 
         # 开始下载数据
-        data = self.datayesClient.downloadData(path, params)
+        data = self.datayesClient.downloadDaliyData(path, params)
 
         if data:
             # 创建datetime索引
-            self.dbClient[DAILY_DB_NAME][symbol].ensure_index([('datetime', pymongo.ASCENDING)],
-                                                              unique=True)
+            self.dbClient[DAILY_DB_NAME][symbol].ensure_index([('datetime', pymongo.ASCENDING)], unique=True)
 
             for d in data:
                 bar = CtaBarData()
@@ -157,7 +156,7 @@ class HistoryDataEngine(object):
                 flt = {'datetime': bar.datetime}
                 self.dbClient[DAILY_DB_NAME][symbol].update_one(flt, {'$set': bar.__dict__}, upsert=True)
 
-                print u'%s下载完成' % symbol
+            print u'%s下载完成' % symbol
         else:
             print u'找不到合约%s' % symbol
 
@@ -195,7 +194,7 @@ class HistoryDataEngine(object):
         params['instrumentID'] = symbol
         params['unit'] = unit
 
-        data = self.datayesClient.downloadData(path, params)
+        data = self.datayesClient.downloadBarData(path, params)
         print u"datayesClient返回值: ", data
 
         if data:
@@ -376,10 +375,11 @@ if __name__ == '__main__':
 
     e = HistoryDataEngine()
     sleep(1)
-    e.downloadFuturesIntradayBar('bu1706', 5)
+    e.downloadFuturesIntradayBar('bu1706', 30)
     # e.downloadEquityDailyBar('bu1703')
     # e.downloadFuturesSymbol()
     # e.downloadAllFuturesDailyBar()
+    # e.downloadFuturesDailyBar('ag1702')
 
     # 这里将项目中包含的股指日内分钟线csv导入MongoDB，作者电脑耗时大约3分钟
     # loadMcCsv('IF0000_1min.csv', MINUTE_DB_NAME, 'IF0000')

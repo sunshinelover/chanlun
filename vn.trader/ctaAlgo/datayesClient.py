@@ -53,8 +53,8 @@ class DatayesClient(object):
         
     
     #----------------------------------------------------------------------
-    def downloadData(self, path, params):
-        """下载数据"""
+    def downloadBarData(self, path, params):
+        """下载分钟线数据"""
         if not self.settingLoaded:
             print u'%s配置未载入' % self.name
             return None
@@ -77,7 +77,33 @@ class DatayesClient(object):
                     elif 'message' in result:
                         print u'%s查询失败，返回信息%s' %(self.name, result['message'])
                     return None
-                    
+
+
+    def downloadDaliyData(self, path, params):
+        """下载日线数据"""
+        if not self.settingLoaded:
+            print u'%s配置未载入' % self.name
+            return None
+        else:
+            url = '/'.join([self.domain, self.version, path])
+            r = requests.get(url=url, headers=self.header, params=params)
+            print u'开始下载数据'
+
+            if r.status_code != HTTP_OK:
+                print u'%shttp请求失败，状态代码%s' % (self.name, r.status_code)
+                return None
+            else:
+                result = r.json()
+                print u'通联数据接口返回值: ', result
+                # if 'retCode' in result and result['retMsg'] == 'Success':
+                if result['retCode'] == 1:
+                    return result['data']
+                else:
+                    if 'retCode' in result:
+                        print u'%s查询失败，返回信息%s' % (self.name, result['retMsg'])
+                    elif 'message' in result:
+                        print u'%s查询失败，返回信息%s' % (self.name, result['message'])
+                    return None
                     
     
     
