@@ -1,9 +1,7 @@
-﻿{
-	"fontFamily": "微软雅黑",
+{
+	"fontFamily": "Microsoft YaHei",
 	"fontSize": 12,
-
 	"mongoHost": "192.168.0.107",
 	"mongoPort": 27017,
-
 	"darkStyle": true
 }
