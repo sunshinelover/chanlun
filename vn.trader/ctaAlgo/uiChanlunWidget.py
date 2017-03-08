@@ -3,8 +3,8 @@
 """
 缠论模块相关的GUI控制组件
 """
-
-from uiBasicWidget import QtGui, QtCore, BasicCell
+from vtGateway import VtSubscribeReq
+from uiBasicWidget import QtGui, QtCore, BasicCell,BasicMonitor,TradingWidget
 from eventEngine import *
 import pyqtgraph as pg
 import numpy as np
@@ -14,141 +14,140 @@ from datetime import datetime, timedelta
 #from vn.demo.ctpdemo.demoUi import *
 
 ########################################################################
-class ChanlunValueMonitor(QtGui.QTableWidget):
-    """参数监控"""
-
-    # ----------------------------------------------------------------------
-    def __init__(self, parent=None):
-        """Constructor"""
-        super(ChanlunValueMonitor, self).__init__(parent)
-
-        self.keyCellDict = {}
-        self.data = None
-        self.inited = False
-
-        self.initUi()
-
-    # ----------------------------------------------------------------------
-    def initUi(self):
-        """初始化界面"""
-        self.setRowCount(1)
-        self.verticalHeader().setVisible(False)
-        self.setEditTriggers(self.NoEditTriggers)
-
-        self.setMaximumHeight(self.sizeHint().height())
-
-    # ----------------------------------------------------------------------
-    def updateData(self, data):
-        """更新数据"""
-        if not self.inited:
-            self.setColumnCount(len(data))
-            self.setHorizontalHeaderLabels(data.keys())
-
-            col = 0
-            for k, v in data.items():
-                cell = QtGui.QTableWidgetItem(unicode(v))
-                self.keyCellDict[k] = cell
-                self.setItem(0, col, cell)
-                col += 1
-
-            self.inited = True
-        else:
-            for k, v in data.items():
-                cell = self.keyCellDict[k]
-                cell.setText(unicode(v))
+# class ChanlunValueMonitor(QtGui.QTableWidget):
+#     """参数监控"""
+#
+#     # ----------------------------------------------------------------------
+#     def __init__(self, parent=None):
+#         """Constructor"""
+#         super(ChanlunValueMonitor, self).__init__(parent)
+#
+#         self.keyCellDict = {}
+#         self.data = None
+#         self.inited = False
+#
+#         self.initUi()
+#
+#     # ----------------------------------------------------------------------
+#     def initUi(self):
+#         """初始化界面"""
+#         self.setRowCount(1)
+#         self.verticalHeader().setVisible(False)
+#         self.setEditTriggers(self.NoEditTriggers)
+#
+#         self.setMaximumHeight(self.sizeHint().height())
+#
+#     # ----------------------------------------------------------------------
+#     def updateData(self, data):
+#         """更新数据"""
+#         if not self.inited:
+#             self.setColumnCount(len(data))
+#             self.setHorizontalHeaderLabels(data.keys())
+#
+#             col = 0
+#             for k, v in data.items():
+#                 cell = QtGui.QTableWidgetItem(unicode(v))
+#                 self.keyCellDict[k] = cell
+#                 self.setItem(0, col, cell)
+#                 col += 1
+#
+#             self.inited = True
+#         else:
+#             for k, v in data.items():
+#                 cell = self.keyCellDict[k]
+#                 cell.setText(unicode(v))
 
 
 ########################################################################
-class ChanlunStrategyManager(QtGui.QGroupBox):
-    """策略管理组件"""
-    signal = QtCore.pyqtSignal(type(Event()))
-
-    # ----------------------------------------------------------------------
-    def __init__(self, chanlunEngine, eventEngine, name, parent=None):
-        """Constructor"""
-        super(ChanlunStrategyManager, self).__init__(parent)
-
-        self.chanlunEngine = chanlunEngine
-        self.eventEngine = eventEngine
-        self.name = name
-
-        self.initUi()
-        self.updateMonitor()
-        self.registerEvent()
-
-    # ----------------------------------------------------------------------
-    def initUi(self):
-        """初始化界面"""
-        # self.setTitle(self.name)
-        #
-        # self.paramMonitor = ChanlunValueMonitor(self)
-        # self.varMonitor = ChanlunValueMonitor(self)
-        #
-        # maxHeight = 60
-        # self.paramMonitor.setMaximumHeight(maxHeight)
-        # self.varMonitor.setMaximumHeight(maxHeight)
-        #
-        # buttonInit = QtGui.QPushButton(u'初始化')
-        # buttonStart = QtGui.QPushButton(u'启动')
-        # buttonStop = QtGui.QPushButton(u'停止')
-        # buttonInit.clicked.connect(self.init)
-        # buttonStart.clicked.connect(self.start)
-        # buttonStop.clicked.connect(self.stop)
-        #
-        # hbox1 = QtGui.QHBoxLayout()
-        # hbox1.addWidget(buttonInit)
-        # hbox1.addWidget(buttonStart)
-        # hbox1.addWidget(buttonStop)
-        # hbox1.addStretch()
-        #
-        # hbox2 = QtGui.QHBoxLayout()
-        # hbox2.addWidget(self.paramMonitor)
-        #
-        # hbox3 = QtGui.QHBoxLayout()
-        # hbox3.addWidget(self.varMonitor)
-        #
-        # vbox = QtGui.QVBoxLayout()
-        # vbox.addLayout(hbox1)
-        # vbox.addLayout(hbox2)
-        # vbox.addLayout(hbox3)
-        #
-        # self.setLayout(vbox)
-
-
-        self.setLayout(hbox)
-        self.show()
-    # ----------------------------------------------------------------------
-    def updateMonitor(self, event=None):
-        """显示策略最新状态"""
-        paramDict = self.chanlunEngine.getStrategyParam(self.name)
-        if paramDict:
-            self.paramMonitor.updateData(paramDict)
-
-        varDict = self.chanlunEngine.getStrategyVar(self.name)
-        if varDict:
-            self.varMonitor.updateData(varDict)
-
-            # ----------------------------------------------------------------------
-
-    def registerEvent(self):
-        """注册事件监听"""
-        self.signal.connect(self.updateMonitor)
-        self.eventEngine.register(EVENT_CHANLUN_STRATEGY + self.name, self.signal.emit)
-
-    # ----------------------------------------------------------------------
-    def init(self):
-        """初始化策略"""
-        self.chanlunEngine.initStrategy(self.name)
-
-    # ----------------------------------------------------------------------
-    def start(self):
-        """启动策略"""
-        self.chanlunEngine.startStrategy(self.name)
-
-    # ----------------------------------------------------------------------
-    def stop(self):
-        """停止策略"""
-        self.chanlunEngine.stopStrategy(self.name)
+# class ChanlunStrategyManager(QtGui.QGroupBox):
+#     """策略管理组件"""
+#     signal = QtCore.pyqtSignal(type(Event()))
+#
+#     # ----------------------------------------------------------------------
+#     def __init__(self, chanlunEngine, eventEngine, name, parent=None):
+#         """Constructor"""
+#         super(ChanlunStrategyManager, self).__init__(parent)
+#
+#         self.chanlunEngine = chanlunEngine
+#         self.eventEngine = eventEngine
+#         self.name = name
+#
+#         self.initUi()
+#         self.updateMonitor()
+#         self.registerEvent()
+#
+#     # ----------------------------------------------------------------------
+#     def initUi(self):
+#         """初始化界面"""
+#         # self.setTitle(self.name)
+#         #
+#         # self.paramMonitor = ChanlunValueMonitor(self)
+#         # self.varMonitor = ChanlunValueMonitor(self)
+#         #
+#         # maxHeight = 60
+#         # self.paramMonitor.setMaximumHeight(maxHeight)
+#         # self.varMonitor.setMaximumHeight(maxHeight)
+#         #
+#         # buttonInit = QtGui.QPushButton(u'初始化')
+#         # buttonStart = QtGui.QPushButton(u'启动')
+#         # buttonStop = QtGui.QPushButton(u'停止')
+#         # buttonInit.clicked.connect(self.init)
+#         # buttonStart.clicked.connect(self.start)
+#         # buttonStop.clicked.connect(self.stop)
+#         #
+#         # hbox1 = QtGui.QHBoxLayout()
+#         # hbox1.addWidget(buttonInit)
+#         # hbox1.addWidget(buttonStart)
+#         # hbox1.addWidget(buttonStop)
+#         # hbox1.addStretch()
+#         #
+#         # hbox2 = QtGui.QHBoxLayout()
+#         # hbox2.addWidget(self.paramMonitor)
+#         #
+#         # hbox3 = QtGui.QHBoxLayout()
+#         # hbox3.addWidget(self.varMonitor)
+#         #
+#         # vbox = QtGui.QVBoxLayout()
+#         # vbox.addLayout(hbox1)
+#         # vbox.addLayout(hbox2)
+#         # vbox.addLayout(hbox3)
+#         #
+#         # self.setLayout(vbox)
+#
+#
+#
+#     # ----------------------------------------------------------------------
+#     def updateMonitor(self, event=None):
+#         """显示策略最新状态"""
+#         paramDict = self.chanlunEngine.getStrategyParam(self.name)
+#         if paramDict:
+#             self.paramMonitor.updateData(paramDict)
+#
+#         varDict = self.chanlunEngine.getStrategyVar(self.name)
+#         if varDict:
+#             self.varMonitor.updateData(varDict)
+#
+#             # ----------------------------------------------------------------------
+#
+#     def registerEvent(self):
+#         """注册事件监听"""
+#         self.signal.connect(self.updateMonitor)
+#         self.eventEngine.register(EVENT_CHANLUN_STRATEGY + self.name, self.signal.emit)
+#
+#     # ----------------------------------------------------------------------
+#     def init(self):
+#         """初始化策略"""
+#         self.chanlunEngine.initStrategy(self.name)
+#
+#     # ----------------------------------------------------------------------
+#     def start(self):
+#         """启动策略"""
+#         self.chanlunEngine.startStrategy(self.name)
+#
+#     # ----------------------------------------------------------------------
+#     def stop(self):
+#         """停止策略"""
+#         self.chanlunEngine.stopStrategy(self.name)
 
 
 ########################################################################
@@ -164,7 +163,8 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.chanlunEngine = chanlunEngine
         self.eventEngine = eventEngine
 
-        self.strategyLoaded = False
+        self.penLoaded = False
+        self.instrumentid = ''
 
         self.initUi()
         self.registerEvent()
@@ -183,22 +183,19 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self)
 
         # 期货代码输入框
-        codeEdit = QtGui.QLineEdit()
-        codeEdit.setPlaceholderText(u'在此输入期货代码')
+        self.codeEdit = QtGui.QLineEdit()
+        self.codeEdit.setPlaceholderText(u'在此输入期货代码')
+        self.codeEdit.setMaximumWidth(200)
         # 按钮
-        loadButton = QtGui.QPushButton(u'分笔')
-        initAllButton = QtGui.QPushButton(u'分段')
-        startAllButton = QtGui.QPushButton(u'买卖点')
-        stopAllButton = QtGui.QPushButton(u'还原')
+        penButton = QtGui.QPushButton(u'分笔')
+        segmentButton = QtGui.QPushButton(u'分段')
+        shopButton = QtGui.QPushButton(u'买卖点')
+        restoreButton = QtGui.QPushButton(u'还原')
 
-        loadButton.clicked.connect(self.load)
-        initAllButton.clicked.connect(self.initAll)
-        startAllButton.clicked.connect(self.startAll)
-        stopAllButton.clicked.connect(self.stopAll)
-
-        # 滚动区域，放置所有的ChanlunStrategyManager
-        # self.scrollArea = QtGui.QScrollArea()
-        # self.scrollArea.setWidgetResizable(True)
+        penButton.clicked.connect(self.pen)
+        segmentButton.clicked.connect(self.segment)
+        shopButton.clicked.connect(self.shop)
+        restoreButton.clicked.connect(self.restore)
 
         # Chanlun组件的日志监控
         self.chanlunLogMonitor = QtGui.QTextEdit()
@@ -207,11 +204,11 @@ class ChanlunEngineManager(QtGui.QWidget):
 
         # 设置布局
         hbox2 = QtGui.QHBoxLayout()
-        hbox2.addWidget(codeEdit)
-        hbox2.addWidget(loadButton)
-        hbox2.addWidget(initAllButton)
-        hbox2.addWidget(startAllButton)
-        hbox2.addWidget(stopAllButton)
+        hbox2.addWidget(self.codeEdit)
+        hbox2.addWidget(penButton)
+        hbox2.addWidget(segmentButton)
+        hbox2.addWidget(shopButton)
+        hbox2.addWidget(restoreButton)
         hbox2.addStretch()
 
 
@@ -252,54 +249,78 @@ class ChanlunEngineManager(QtGui.QWidget):
         vbox.addWidget(self.chanlunLogMonitor)
         self.setLayout(vbox)
 
+        self.codeEdit.returnPressed.connect(self.updateSymbol)
+
+    def updateSymbol(self):
+        """合约变化"""
+        # 读取组件数据
+        instrumentid = str(self.codeEdit.text())
+
+
+        # 重新注册事件监听
+        self.eventEngine.unregister(EVENT_TICK + self.instrumentid, self.signal.emit)
+        self.eventEngine.register(EVENT_TICK + instrumentid, self.signal.emit)
+
+        # 订阅合约
+        req = VtSubscribeReq()
+        req.instrumentid = instrumentid
+
+        # 更新组件当前交易的合约
+        self.instrumentid = instrumentid
+
     # ----------------------------------------------------------------------
-    def initStrategyManager(self):
-        """初始化策略管理组件界面"""
-        w = QtGui.QWidget()
-        vbox = QtGui.QVBoxLayout()
-
-        for name in self.chanlunEngine.strategyDict.keys():
-            strategyManager = ChanlunStrategyManager(self.chanlunEngine, self.eventEngine, name)
-            vbox.addWidget(strategyManager)
-
-        vbox.addStretch()
-
-        w.setLayout(vbox)
-        self.scrollArea.setWidget(w)
+    # def initStrategyManager(self):
+    #     """初始化策略管理组件界面"""
+    #     w = QtGui.QWidget()
+    #     vbox = QtGui.QVBoxLayout()
+    #
+    #     for name in self.chanlunEngine.strategyDict.keys():
+    #         strategyManager = ChanlunStrategyManager(self.chanlunEngine, self.eventEngine, name)
+    #         vbox.addWidget(strategyManager)
+    #
+    #     vbox.addStretch()
+    #
+    #     w.setLayout(vbox)
+    #     self.scrollArea.setWidget(w)
 
         # ----------------------------------------------------------------------
 
-    def initAll(self):
-        """全部初始化"""
-        for name in self.chanlunEngine.strategyDict.keys():
-            self.chanlunEngine.initStrategy(name)
+    def segment(self):
+        """加载分段"""
+        self.chanlunEngine.writeChanlunLog(u'分段')
 
-            # ----------------------------------------------------------------------
-
-    def startAll(self):
-        """全部启动"""
-        for name in self.chanlunEngine.strategyDict.keys():
-            self.chanlunEngine.startStrategy(name)
 
     # ----------------------------------------------------------------------
-    def stopAll(self):
-        """全部停止"""
-        for name in self.chanEngine.strategyDict.keys():
-            self.chanEngine.stopStrategy(name)
+
+    def shop(self):
+        """加载买卖点"""
+        self.chanlunEngine.writeChanlunLog(u'买卖点')
+
 
     # ----------------------------------------------------------------------
-    def load(self):
-        """加载策略"""
-        if not self.strategyLoaded:
+    def restore(self):
+        """还原初始k线状态"""
+
+        self.chanlunEngine.writeChanlunLog(u'还原')
+
+    # ----------------------------------------------------------------------
+    def pen(self):
+        """加载分笔"""
+        if not self.pen:
             self.chanlunEngine.loadSetting()
-            self.initStrategyManager()
-            self.strategyLoaded = True
-            self.chanlunEngine.writeChanlunLog(u'缠论策略加载成功')
+     #       self.initStrategyManager()  此处应该修改成分笔的函数
+        self.pen = True
+        self.chanlunEngine.writeChanlunLog(u'分笔加载成功')
 
     # ----------------------------------------------------------------------
     def updateChanlunLog(self, event):
         """更新缠论相关日志"""
+
+        self.eventEngine.register(EVENT_CHANLUN_LOG, self.signal.emit)
+
         log = event.dict_['data']
+        print 'chanlun:'
+        print type(log)
         content = '\t'.join([log.logTime, log.logContent])
         self.chanlunLogMonitor.append(content)
 
@@ -394,12 +415,12 @@ class PriceWidget(QtGui.QWidget):
             return QtCore.QRectF(self.picture.boundingRect())
 
     #----------------------------------------------------------------------
-    def __init__(self, eventEngine, mainEngine, parent=None):
+    def __init__(self, eventEngine, chanlunEngine, parent=None):
         """Constructor"""
         super(PriceWidget, self).__init__(parent)
 
         self.__eventEngine = eventEngine
-        self.__mainEngine = mainEngine
+        self.__mainEngine = chanlunEngine
         # MongoDB数据库相关
         self.__mongoConnected = False
         self.__mongoConnection = None
@@ -586,6 +607,7 @@ class PriceWidget(QtGui.QWidget):
     def updateMarketData(self, event):
         """更新行情"""
         data = event.dict_['data']
+        print data
         symbol = data['InstrumentID']
         tick = Tick(symbol)
         tick.openPrice = data['OpenPrice']
@@ -787,8 +809,7 @@ class PriceWidget(QtGui.QWidget):
     def registerEvent(self):
         """注册事件监听"""
         self.signal.connect(self.updateMarketData)
-        #self.__eventEngine.register(EVENT_MARKETDATA, self.signal.emit)
-        self.__eventEngine.register('eMarketData', self.signal.emit)
+        self.__eventEngine.register(EVENT_MARKETDATA, self.signal.emit)
 
 class Tick:
     """Tick数据对象"""

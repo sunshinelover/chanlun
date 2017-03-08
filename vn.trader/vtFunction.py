@@ -37,8 +37,7 @@ def loadMongoSetting():
         port = setting['mongoPort']
         print u'读取成功'
     except:
-        print u'读取错误'
-        host = "localhost"
+        host = 'localhost'
         port = 27017
         
     return host, port
