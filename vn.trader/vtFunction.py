@@ -38,7 +38,7 @@ def loadMongoSetting():
         print u'读取成功'
     except:
         print u'读取错误'
-        host = '192.168.0.107'
+        host = "localhost"
         port = 27017
         
     return host, port
