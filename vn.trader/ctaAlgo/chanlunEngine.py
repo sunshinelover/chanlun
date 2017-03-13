@@ -511,6 +511,11 @@ class ChanlunEngine(object):
         event = Event(EVENT_CTA_STRATEGY + name)
         self.eventEngine.put(event)
 
+    def putMarketEvent(self):
+        """触发行情推送事件"""
+        event = Event(type_=EVENT_MARKETDATA)
+        self.eventEngine.put(event)
+
 
 ########################################################################
 class PositionBuffer(object):

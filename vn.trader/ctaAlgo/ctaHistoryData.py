@@ -376,7 +376,7 @@ if __name__ == '__main__':
 
     e = HistoryDataEngine()
     sleep(1)
-    e.downloadFuturesIntradayBar('bu1706', 1)
+    e.downloadFuturesIntradayBar('ag1706', 1)
     # e.downloadEquityDailyBar('bu1703')
     # e.downloadFuturesSymbol()
     # e.downloadAllFuturesDailyBar()

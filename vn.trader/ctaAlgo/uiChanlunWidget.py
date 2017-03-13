@@ -8,7 +8,7 @@ from uiBasicWidget import QtGui, QtCore, BasicCell,BasicMonitor,TradingWidget
 from eventEngine import *
 import pyqtgraph as pg
 import numpy as np
-from pymongo import MongoClient
+import pymongo
 from pymongo.errors import *
 from datetime import datetime, timedelta
 #from vn.demo.ctpdemo.demoUi import *
@@ -327,7 +327,7 @@ class ChanlunEngineManager(QtGui.QWidget):
     # ----------------------------------------------------------------------
     def registerEvent(self):
         """注册事件监听"""
-        self.signal.connect(self.updateChanlunLog)
+        self.signal.connect(self.registerEvent)
         self.eventEngine.register(EVENT_CHANLUN_LOG, self.signal.emit)
 
 ########################################################################
@@ -377,10 +377,10 @@ class PriceWidget(QtGui.QWidget):
     listOpenInterest = []
 
     # 是否完成了历史数据的读取
-    initCompleted = False
+    initCompleted = True
     # 初始化时读取的历史数据的起始日期(可以选择外部设置)
     startDate = None
-    symbol = 'SR701'
+    symbol = 'ag1706'
 
     class CandlestickItem(pg.GraphicsObject):
         def __init__(self, data):
@@ -449,7 +449,8 @@ class PriceWidget(QtGui.QWidget):
         self.hbl.addLayout(self.vbl_2)
         self.setLayout(self.hbl)
 
-        self.initHistoricalData()  # 下载历史数据
+        self.initHistoricalData()  # 下载历史Tick数据并画图
+        # self.plotMin()   #使用数据库中的分钟数据画K线
 
     #----------------------------------------------------------------------
     def initplotTick(self):
@@ -495,10 +496,30 @@ class PriceWidget(QtGui.QWidget):
 
         self.curve7 = self.pw3.plot()
 
+    def plotMin(self):
+        print "plotMinK start"
+        self.initCompleted = True
+        cx = self.__mongoMinDB[self.symbol].find()
+        print cx.count()
+        if cx:
+            for data in cx:
+                self.barOpen = data['open']
+                self.barClose = data['close']
+                self.barLow = data['low']
+                self.barHigh = data['high']
+                self.barOpenInterest = data['openInterest']
+                # print self.num, self.barOpen, self.barClose, self.barLow, self.barHigh, self.barOpenInterest
+                self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh, self.barOpenInterest)
+                self.num += 1
+
+        print "plotMinK success"
+
+
     #----------------------------------------------------------------------
     def initHistoricalData(self,startDate=None):
         """初始历史数据"""
-
+        print "download histrical data"
+        self.initCompleted = True  # 读取历史数据完成
         td = timedelta(days=1)     # 读取3天的历史TICK数据
 
         if startDate:
@@ -507,52 +528,53 @@ class PriceWidget(QtGui.QWidget):
             today = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
             cx = self.loadTick(self.symbol, today-td)
 
+        print cx.count()
+
         if cx:
             for data in cx:
-                tick = Tick(data['InstrumentID'])
+                tick = Tick(data['symbol'])
 
-                tick.openPrice = data['OpenPrice']
-                tick.highPrice = data['HighestPrice']
-                tick.lowPrice = data['LowestPrice']
-                tick.lastPrice = data['LastPrice']
+                tick.openPrice = data['lastPrice']
+                tick.highPrice = data['upperLimit']
+                tick.lowPrice = data['lowerLimit']
+                tick.lastPrice = data['lastPrice']
 
-                tick.volume = data['Volume']
-                tick.openInterest = data['OpenInterest']
+                tick.volume = data['volume']
+                tick.openInterest = data['openInterest']
 
-                tick.upperLimit = data['UpperLimitPrice']
-                tick.lowerLimit = data['LowerLimitPrice']
+                tick.upperLimit = data['upperLimit']
+                tick.lowerLimit = data['lowerLimit']
 
-                tick.time = data['UpdateTime']
-                tick.ms = data['UpdateMillisec']
+                tick.time = data['time']
+                # tick.ms = data['UpdateMillisec']
 
-                tick.bidPrice1 = data['BidPrice1']
-                tick.bidPrice2 = data['BidPrice2']
-                tick.bidPrice3 = data['BidPrice3']
-                tick.bidPrice4 = data['BidPrice4']
-                tick.bidPrice5 = data['BidPrice5']
+                tick.bidPrice1 = data['bidPrice1']
+                tick.bidPrice2 = data['bidPrice2']
+                tick.bidPrice3 = data['bidPrice3']
+                tick.bidPrice4 = data['bidPrice4']
+                tick.bidPrice5 = data['bidPrice5']
 
-                tick.askPrice1 = data['AskPrice1']
-                tick.askPrice2 = data['AskPrice2']
-                tick.askPrice3 = data['AskPrice3']
-                tick.askPrice4 = data['AskPrice4']
-                tick.askPrice5 = data['AskPrice5']
+                tick.askPrice1 = data['askPrice1']
+                tick.askPrice2 = data['askPrice2']
+                tick.askPrice3 = data['askPrice3']
+                tick.askPrice4 = data['askPrice4']
+                tick.askPrice5 = data['askPrice5']
 
-                tick.bidVolume1 = data['BidVolume1']
-                tick.bidVolume2 = data['BidVolume2']
-                tick.bidVolume3 = data['BidVolume3']
-                tick.bidVolume4 = data['BidVolume4']
-                tick.bidVolume5 = data['BidVolume5']
+                tick.bidVolume1 = data['bidVolume1']
+                tick.bidVolume2 = data['bidVolume2']
+                tick.bidVolume3 = data['bidVolume3']
+                tick.bidVolume4 = data['bidVolume4']
+                tick.bidVolume5 = data['bidVolume5']
 
-                tick.askVolume1 = data['AskVolume1']
-                tick.askVolume2 = data['AskVolume2']
-                tick.askVolume3 = data['AskVolume3']
-                tick.askVolume4 = data['AskVolume4']
-                tick.askVolume5 = data['AskVolume5']
+                tick.askVolume1 = data['askVolume1']
+                tick.askVolume2 = data['askVolume2']
+                tick.askVolume3 = data['askVolume3']
+                tick.askVolume4 = data['askVolume4']
+                tick.askVolume5 = data['askVolume5']
 
                 self.onTick(tick)
 
-        self.initCompleted = True    # 读取历史数据完成
-        # pprint('load historic data completed')
+        print('load historic data completed')
 
     #----------------------------------------------------------------------
     def plotTick(self):
@@ -606,6 +628,7 @@ class PriceWidget(QtGui.QWidget):
     #----------------------------------------------------------------------
     def updateMarketData(self, event):
         """更新行情"""
+        print "update"
         data = event.dict_['data']
         print data
         symbol = data['InstrumentID']
@@ -660,7 +683,11 @@ class PriceWidget(QtGui.QWidget):
 
         # 首先生成datetime.time格式的时间（便于比较）,从字符串时间转化为time格式的时间
         hh, mm, ss = tick.time.split(':')
-        self.ticktime = time(int(hh), int(mm), int(ss), microsecond=tick.ms)
+        if(len(ss) > 2):
+            ss1, ss2 = ss.split('.')
+            self.ticktime = time(int(hh), int(mm), int(ss1), microsecond=int(ss2)*100)
+        else:
+            self.ticktime = time(int(hh), int(mm), int(ss), microsecond=tick.ms)
 
         # 计算tick图的相关参数
         if self.ptr == 0:
@@ -677,8 +704,8 @@ class PriceWidget(QtGui.QWidget):
         self.listslowMA[self.ptr] = self.slowMA
 
         self.ptr += 1
-        # pprint("----------")
-        # pprint(self.ptr)
+        print("----------")
+        print(self.ptr)
         if self.ptr >= self.listlastPrice.shape[0]:
             tmp = self.listlastPrice
             self.listlastPrice = np.empty(self.listlastPrice.shape[0] * 2)
@@ -776,9 +803,10 @@ class PriceWidget(QtGui.QWidget):
     def __connectMongo(self):
         """连接MongoDB数据库"""
         try:
-            self.__mongoConnection = MongoClient()
+            self.__mongoConnection = pymongo.MongoClient("localhost", 27017)
             self.__mongoConnected = True
-            self.__mongoTickDB = self.__mongoConnection['TickDB']
+            self.__mongoTickDB = self.__mongoConnection['VnTrader_Tick_Db']
+            self.__mongoMinDB = self.__mongoConnection['VnTrader_1Min_Db']
         except ConnectionFailure:
             pass
 
@@ -793,21 +821,26 @@ class PriceWidget(QtGui.QWidget):
     #----------------------------------------------------------------------
     def loadTick(self, symbol, startDate, endDate=None):
         """从MongoDB中读取Tick数据"""
-        if self.__mongoConnected:
-            collection = self.__mongoTickDB[symbol]
-
-            # 如果输入了读取TICK的最后日期
-            if endDate:
-                cx = collection.find({'date': {'$gte': startDate, '$lte': endDate}})
-            else:
-                cx = collection.find({'date': {'$gte': startDate}})
-            return cx
-        else:
-            return None
+        cx = self.__mongoTickDB[symbol].find()
+        print cx.count()
+        return cx
+        # if self.__mongoConnected:
+        #     collection = self.__mongoTickDB[symbol]
+        #
+        #     # 如果输入了读取TICK的最后日期
+        #     if endDate:
+        #         cx = collection.find({'date': {'$gte': startDate, '$lte': endDate}})
+        #     else:
+        #         cx = collection.find({'date': {'$gte': startDate}})
+        #     return cx
+        # else:
+        #     return None
 
     #----------------------------------------------------------------------
     def registerEvent(self):
         """注册事件监听"""
+        print "connect"
+        # self.__mainEngine.putMarketEvent()
         self.signal.connect(self.updateMarketData)
         self.__eventEngine.register(EVENT_MARKETDATA, self.signal.emit)
 
