@@ -294,7 +294,7 @@ class MainWindow(QtGui.QMainWindow):
         try:
            self.widgetDict['chanlunM'].showMaximized()
         except KeyError:
-           self.widgetDict['chanlunM'] = ChanlunEngineManager(self.mainEngine.chanlunEngine, self.eventEngine)
+           self.widgetDict['chanlunM'] = ChanlunEngineManager(self.mainEngine.chanlunEngine, self.eventEngine,self.mainEngine)
            self.widgetDict['chanlunM'].showMaximized()
 
     #----------------------------------------------------------------------

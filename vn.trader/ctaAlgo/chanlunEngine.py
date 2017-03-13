@@ -13,13 +13,13 @@ from ctaBase import *
 from ctaSetting import STRATEGY_CLASS
 from eventEngine import *
 from vtConstant import *
-from vtGateway import VtSubscribeReq, VtOrderReq, VtCancelOrderReq, VtLogData
+from vtGateway import VtSubscribeReq, VtOrderReq, VtCancelOrderReq, VtLogData,VtTickData
 from vtFunction import todayDate
 
 
 ########################################################################
 class ChanlunEngine(object):
-    """CTA策略引擎"""
+    """缠论策略引擎"""
     settingFileName = 'CTA_setting.json'
     settingFileName = os.getcwd() + '/ctaAlgo/' + settingFileName
 
@@ -63,6 +63,15 @@ class ChanlunEngine(object):
 
         # 注册事件监听
         self.registerEvent()
+
+    # ----------------------------------------------------------------------
+    def selectInstrument(self, instrumentid):
+        """获取合约信息对象"""
+        try:
+            instrument = self.dictInstrument[instrumentid]
+        except KeyError:
+            instrument = None
+        return instrument
 
     # ----------------------------------------------------------------------
     def sendOrder(self, vtSymbol, orderType, price, volume, strategy):
@@ -353,6 +362,15 @@ class ChanlunEngine(object):
         self.eventEngine.put(event)
 
         # ----------------------------------------------------------------------
+    def putChanlunEvent(self):
+        """触发缠论策略状态变化事件（通常用于通知GUI更新）"""
+
+        data = VtTickData()
+        event = Event(type_=EVENT_MARKETDATA)
+        event.dict_['data'] = data
+        self.eventEngine.put(event)
+
+        # ----------------------------------------------------------------------
 
     def loadStrategy(self, setting):
         """载入策略"""
@@ -510,6 +528,8 @@ class ChanlunEngine(object):
         """触发策略状态变化事件（通常用于通知GUI更新）"""
         event = Event(EVENT_CTA_STRATEGY + name)
         self.eventEngine.put(event)
+
+
 
 
 ########################################################################
