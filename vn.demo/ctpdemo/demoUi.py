@@ -1400,7 +1400,9 @@ class PriceWidget(QtGui.QWidget):
     #----------------------------------------------------------------------
     def updateMarketData(self, event):
         """更新行情"""
+        print "update"
         data = event.dict_['data']
+        print data
         symbol = data['InstrumentID']
         tick = Tick(symbol)
         tick.openPrice = data['OpenPrice']

@@ -74,7 +74,7 @@ class CtpGateway(VtGateway):
         """Constructor"""
         super(CtpGateway, self).__init__(eventEngine, gatewayName)
         
-        self.mdApi = CtpMdApi(self)     # 行情API
+        self.mdApi = CtpMdApi(self, eventEngine)     # 行情API
         self.tdApi = CtpTdApi(self)     # 交易API
         
         self.mdConnected = False        # 行情API连接状态，登录完成后为True
@@ -201,12 +201,13 @@ class CtpMdApi(MdApi):
     """CTP行情API实现"""
 
     #----------------------------------------------------------------------
-    def __init__(self, gateway):
+    def __init__(self, gateway, eventEngine):
         """Constructor"""
         super(CtpMdApi, self).__init__()
         
         self.gateway = gateway                  # gateway对象
         self.gatewayName = gateway.gatewayName  # gateway对象名称
+        self.eventEngine = eventEngine
         
         self.reqID = EMPTY_INT              # 操作请求编号
         
@@ -321,32 +322,37 @@ class CtpMdApi(MdApi):
         """行情推送"""
         tick = VtTickData()
         tick.gatewayName = self.gatewayName
-        
+
         tick.symbol = data['InstrumentID']
         tick.exchange = exchangeMapReverse.get(data['ExchangeID'], u'未知')
         tick.vtSymbol = tick.symbol #'.'.join([tick.symbol, EXCHANGE_UNKNOWN])
-        
+
         tick.lastPrice = data['LastPrice']
         tick.volume = data['Volume']
         tick.openInterest = data['OpenInterest']
         tick.time = '.'.join([data['UpdateTime'], str(data['UpdateMillisec']/100)])
         tick.date = data['TradingDay']
-        
+
         tick.openPrice = data['OpenPrice']
         tick.highPrice = data['HighestPrice']
         tick.lowPrice = data['LowestPrice']
         tick.preClosePrice = data['PreClosePrice']
-        
+
         tick.upperLimit = data['UpperLimitPrice']
         tick.lowerLimit = data['LowerLimitPrice']
-        
+
         # CTP只有一档行情
         tick.bidPrice1 = data['BidPrice1']
         tick.bidVolume1 = data['BidVolume1']
         tick.askPrice1 = data['AskPrice1']
         tick.askVolume1 = data['AskVolume1']
-        
+
         self.gateway.onTick(tick)
+        # 常规行情事件
+        event = Event(type_=EVENT_MARKETDATA)
+        event.dict_['data'] = data
+        self.eventEngine.put(event)
+
         
     #---------------------------------------------------------------------- 
     def onRspSubForQuoteRsp(self, data, error, n, last):
