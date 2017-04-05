@@ -430,8 +430,27 @@ class PriceWidget(QtGui.QWidget):
     #----------------------------------------------------------------------
     def initplotKline(self):
         """Kline"""
+
+        # Tick labels
+        tr = np.arange('2016-06-10 09:00', '2016-06-10 18:00', dtype='datetime64[2h]')  # tick labels one day
+        tday0 = (tr - tr[0]) / (tr[-1] - tr[0])  # Map time to 0.0-1.0 day 2 1.0-2.0 ...
+        tday1 = tday0 + 1
+        tnorm = np.concatenate([tday0, tday1])
+        tr[-1] = tr[0]  # End day=start next day
+        # Create tick labels for axis.setTicks
+        ttick = list()
+        for i, t in enumerate(np.concatenate([tr, tr])):
+            tstr = np.datetime64(t).astype(datetime)
+            ttick.append((tnorm[i], tstr.strftime("%H:%M:%S")))
+
         self.pw2 = pg.PlotWidget(name='Plot2')  # K线图
-        self.pw2.setRange(xRange=[1, 50], padding=None, update=True)
+        pw2x = self.pw2.getAxis('bottom')  # This is the trick
+        pw2x.setGrid(150)
+        pw2x.setTicks([ttick])
+        pw2y = self.pw2.getAxis('left')
+        pw2y.setGrid(150)
+
+        self.pw2.setRange(xRange=[1, 350], padding=None, update=True)
         self.pw2.x()
         self.vbl_1.addWidget(self.pw2)
         self.pw2.setMinimumWidth(1500)
