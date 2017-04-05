@@ -40,7 +40,7 @@ class DatayesClient(object):
         try:
             self.domain = str("http://api.wmcloud.com/data")
             self.version = str("v1")
-            self.token = str("99f13e8438cbbecf1f3eb894c6b58615fa1f295c7b363c0de67cd1745af19212")
+            self.token = str("04c44e7544204a229ccc0b01321d2c8fad43a02a8ee3831d709425a474aea924")
         except KeyError:
             print u'%s配置文件字段缺失' % self.name
             return
@@ -61,16 +61,22 @@ class DatayesClient(object):
         else:
             url = '/'.join([self.domain, self.version, path])
             r = requests.get(url=url, headers=self.header, params=params)
-            print u'开始下载数据'
+            # print u'开始下载数据'
             
             if r.status_code != HTTP_OK:
                 print u'%shttp请求失败，状态代码%s' %(self.name, r.status_code)
                 return None
             else:
                 result = r.json()
-                print u'通联数据接口返回值: ', result
-                if 'retCode' in result and result['retMsg'] == 'Success':
-                    return result['data'][0]['barBodys']
+                # print u'通联数据接口返回值: ', result
+                # if 'retCode' in result and result['retMsg'] == 'Success':
+                if 'retCode' in result:
+                    #通联数据客户端分钟行情与日周月行情返回值格式有区别
+                    #分钟行情返回值在data的barBodys值中
+                    if 'barBodys'in result['data'][0]:
+                        return result['data'][0]['barBodys']
+                    else:
+                        return result['data']
                 else:
                     if 'retCode' in result:
                         print u'%s查询失败，返回信息%s' %(self.name, result['retMsg'])
