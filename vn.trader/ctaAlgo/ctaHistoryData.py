@@ -95,45 +95,58 @@ class HistoryDataEngine(object):
             print u'期货合约代码下载失败'
 
     # ----------------------------------------------------------------------
-    def downloadFuturesDailyBar(self, symbol):
+    def downloadFuturesBar(self, symbol, unit):
         """
-        下载期货合约的日行情，symbol是合约代码，
-        若最后四位为0000（如IF0000），代表下载连续合约。
+        下载期货合约的日、周、月行情，symbol是合约代码，unit包括daily、weekly、monthly，
         """
-        print u'开始下载%s日行情' % symbol
+        print u'开始下载%s %s行情' % (symbol, unit)
 
-        # 查询数据库中已有数据的最后日期
-        cl = self.dbClient[DAILY_DB_NAME][symbol]
-        cx = cl.find(sort=[('datetime', pymongo.DESCENDING)])
-        if cx.count():
-            last = cx[0]
-        else:
-            last = ''
-
-        # 主力合约
-        if '0000' in symbol:
-            path = 'api/market/getMktMFutd.json'
-
-            params = {}
-            params['contractObject'] = symbol.replace('0000', '')
-            params['mainCon'] = 1
-            if last:
-                params['startDate'] = last['date']
-        # 交易合约
-        else:
+        # unit包括daily、weekly、monthly，根据unit值对DB_NAME和path进行赋值
+        DB_NAME = ""
+        if unit == "daily":
+            DB_NAME = DAILY_DB_NAME
             path = 'api/market/getMktFutd.json'
+        elif unit == "weekly":
+            DB_NAME = WEEKLY_DB_NAME
+            path = 'api/market/getMktFutw.json'
+        elif unit == "monthly":
+            DB_NAME = MONTHLY_DB_NAME
+            path = 'api/market/getMktFutm.json'
+        else:
+            print "参数错误"
+            return
 
-            params = {}
-            params['ticker'] = symbol
-            if last:
-                params['startDate'] = last['date']
+        # # 查询数据库中已有数据的最后日期
+        # cl = self.dbClient[DB_NAME][symbol]
+        # cx = cl.find(sort=[('datetime', pymongo.DESCENDING)])
+        # if cx.count():
+        #     last = cx[0]
+        # else:
+        #     last = ''
+
+        # # 主力合约
+        # if '0000' in symbol:
+        #     path = 'api/market/getMktMFutd.json'
+        #
+        #     params = {}
+        #     params['contractObject'] = symbol.replace('0000', '')
+        #     params['mainCon'] = 1
+        #     if last:
+        #         params['startDate'] = last['date']
+        # 交易合约
+
+        params = {}
+        params['ticker'] = symbol
+        # if last:
+        #     params['beginDate'] = last['date']
 
         # 开始下载数据
         data = self.datayesClient.downloadData(path, params)
 
         if data:
+            print "返回 %d 条数据记录" % len(data)
             # 创建datetime索引
-            self.dbClient[DAILY_DB_NAME][symbol].ensure_index([('datetime', pymongo.ASCENDING)],
+            self.dbClient[DB_NAME][symbol].ensure_index([('datetime', pymongo.ASCENDING)],
                                                               unique=True)
 
             for d in data:
@@ -146,8 +159,11 @@ class HistoryDataEngine(object):
                     bar.high = d.get('highestPrice', 0)
                     bar.low = d.get('lowestPrice', 0)
                     bar.close = d.get('closePrice', 0)
-                    bar.date = d.get('tradeDate', '').replace('-', '')
-                    bar.time = ''
+                    if unit == "daily":
+                        bar.date = d.get('tradeDate', '').replace('-', '')
+                    else:
+                        bar.date = d.get('endDate', '').replace('-', '')
+                        bar.tradedays = d.get('tradeDays', 0)
                     bar.datetime = datetime.strptime(bar.date, '%Y%m%d')
                     bar.volume = d.get('turnoverVol', 0)
                     bar.openInterest = d.get('openInt', 0)
@@ -155,34 +171,35 @@ class HistoryDataEngine(object):
                     print d
 
                 flt = {'datetime': bar.datetime}
-                self.dbClient[DAILY_DB_NAME][symbol].update_one(flt, {'$set': bar.__dict__}, upsert=True)
+                self.dbClient[DB_NAME][symbol].update_one(flt, {'$set': bar.__dict__}, upsert=True)
 
-                print u'%s下载完成' % symbol
+            print u'下载完成'
+            return data
         else:
             print u'找不到合约%s' % symbol
 
     # ----------------------------------------------------------------------
-    def downloadAllFuturesDailyBar(self):
-        """下载所有期货的主力合约日行情"""
-        start = time()
-        print u'开始下载所有期货的主力合约日行情'
-
-        productSymbolSet = self.readFuturesProductSymbol()
-
-        print u'代码列表读取成功，产品代码：%s' % productSymbolSet
-
-        # 这里也测试了线程池，但可能由于下载函数中涉及较多的数据格
-        # 式转换，CPU开销较大，多线程效率并无显著改变。
-        # p = ThreadPool(10)
-        # p.map(self.downloadFuturesDailyBar, productSymbolSet)
-        # p.close()
-        # p.join()
-
-        for productSymbol in productSymbolSet:
-            self.downloadFuturesDailyBar(productSymbol + '0000')
-
-        print u'所有期货的主力合约日行情已经全部下载完成, 耗时%s秒' % (time() - start)
-
+    # def downloadAllFuturesDailyBar(self):
+    #     """下载所有期货的主力合约日行情"""
+    #     start = time()
+    #     print u'开始下载所有期货的主力合约日行情'
+    #
+    #     productSymbolSet = self.readFuturesProductSymbol()
+    #
+    #     print u'代码列表读取成功，产品代码：%s' % productSymbolSet
+    #
+    #     # 这里也测试了线程池，但可能由于下载函数中涉及较多的数据格
+    #     # 式转换，CPU开销较大，多线程效率并无显著改变。
+    #     # p = ThreadPool(10)
+    #     # p.map(self.downloadFuturesDailyBar, productSymbolSet)
+    #     # p.close()
+    #     # p.join()
+    #
+    #     for productSymbol in productSymbolSet:
+    #         self.downloadFuturesDailyBar(productSymbol + '0000')
+    #
+    #     print u'所有期货的主力合约日行情已经全部下载完成, 耗时%s秒' % (time() - start)
+    #
     # ----------------------------------------------------------------------
     def downloadFuturesIntradayBar(self, symbol, unit):
         """下载期货的日内分钟行情"""
@@ -196,9 +213,10 @@ class HistoryDataEngine(object):
         params['unit'] = unit
 
         data = self.datayesClient.downloadData(path, params)
-        print u"datayesClient返回值: ", data
+        # print u"datayesClient返回值: ", data
 
         if data:
+            print "返回 %d 条数据记录" % len(data)
             today = datetime.now().strftime('%Y%m%d')
 
             #给数据库命名
@@ -242,7 +260,7 @@ class HistoryDataEngine(object):
                 flt = {'datetime': bar.datetime}
                 self.dbClient[dbname][symbol].update_one(flt, {'$set': bar.__dict__}, upsert=True)
 
-            print u'%s下载完成' % symbol
+            print u'下载完成'
             return data
         else:
             print u'找不到合约%s' % symbol
@@ -377,10 +395,11 @@ if __name__ == '__main__':
 
     e = HistoryDataEngine()
     sleep(1)
-    e.downloadFuturesIntradayBar('ag1706', 1)
+    # e.downloadFuturesIntradayBar('ag1706', 1)
     # e.downloadEquityDailyBar('bu1703')
     # e.downloadFuturesSymbol()
     # e.downloadAllFuturesDailyBar()
+    e.downloadFuturesBar("bu1706", "monthly")
 
     # 这里将项目中包含的股指日内分钟线csv导入MongoDB，作者电脑耗时大约3分钟
     # loadMcCsv('IF0000_1min.csv', MINUTE_DB_NAME, 'IF0000')

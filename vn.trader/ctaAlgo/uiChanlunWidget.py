@@ -13,6 +13,7 @@ from pymongo.errors import *
 from datetime import datetime, timedelta
 from ctaHistoryData import HistoryDataEngine
 import time
+import types
 
 ########################################################################
 class CAxisTime(pg.AxisItem):
@@ -118,6 +119,9 @@ class ChanlunEngineManager(QtGui.QWidget):
         fifteenMButton.clicked.connect(self.fifteenM)
         thirtyMButton.clicked.connect(self.thirtyM)
         sixtyMButton.clicked.connect(self.sixtyM)
+        dayButton.clicked.connect(self.daily)
+        weekButton.clicked.connect(self.weekly)
+        monthButton.clicked.connect(self.monthly)
 
         self.vbox2 = QtGui.QVBoxLayout()
         self.vbox1.addWidget(self.PriceW)
@@ -161,7 +165,7 @@ class ChanlunEngineManager(QtGui.QWidget):
 
 
         #从通联数据客户端获取当日分钟数据并画图
-        self.PriceW.plotMinHistorticData(instrumentid, 1)
+        self.PriceW.plotHistorticData(instrumentid, 1)
 
 
 
@@ -198,8 +202,8 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
         self.vbox1.addWidget(self.PriceW)
 
-        # 从通联数据客户端获取当日分钟数据并画图
-        self.PriceW.plotMinHistorticData(self.instrumentid, 1)
+        # 从通联数据客户端获取数据并画图
+        self.PriceW.plotHistorticData(self.instrumentid, 1)
 
 
 
@@ -211,8 +215,8 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
         self.vbox1.addWidget(self.PriceW)
 
-        # 从通联数据客户端获取当日分钟数据并画图
-        self.PriceW.plotMinHistorticData(self.instrumentid, 5)
+        # 从通联数据客户端获取数据并画图
+        self.PriceW.plotHistorticData(self.instrumentid, 5)
 
     # ----------------------------------------------------------------------
     def fifteenM(self):
@@ -222,8 +226,8 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
         self.vbox1.addWidget(self.PriceW)
 
-        # 从通联数据客户端获取当日分钟数据并画图
-        self.PriceW.plotMinHistorticData(self.instrumentid, 15)
+        # 从通联数据客户端数据并画图
+        self.PriceW.plotHistorticData(self.instrumentid, 15)
 
     # ----------------------------------------------------------------------
     def thirtyM(self):
@@ -233,8 +237,8 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
         self.vbox1.addWidget(self.PriceW)
 
-        # 从通联数据客户端获取当日分钟数据并画图
-        self.PriceW.plotMinHistorticData(self.instrumentid, 30)
+        # 从通联数据客户端获取数据并画图
+        self.PriceW.plotHistorticData(self.instrumentid, 30)
 
 
     # ----------------------------------------------------------------------
@@ -245,8 +249,40 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
         self.vbox1.addWidget(self.PriceW)
 
-        # 从通联数据客户端获取当日分钟数据并画图
-        self.PriceW.plotMinHistorticData(self.instrumentid, 60)
+        # 从通联数据客户端获取数据并画图
+        self.PriceW.plotHistorticData(self.instrumentid, 60)
+
+        # ----------------------------------------------------------------------
+
+    def daily(self):
+        """打开日K线图"""
+        self.chanlunEngine.writeChanlunLog(u'打开合约%s 日K线图' % (self.instrumentid))
+        self.vbox1.removeWidget(self.PriceW)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
+        self.vbox1.addWidget(self.PriceW)
+
+        # 从通联数据客户端获取数据并画图
+        self.PriceW.plotHistorticData(self.instrumentid, "daily")
+
+    def weekly(self):
+        """打开日K线图"""
+        self.chanlunEngine.writeChanlunLog(u'打开合约%s 周K线图' % (self.instrumentid))
+        self.vbox1.removeWidget(self.PriceW)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
+        self.vbox1.addWidget(self.PriceW)
+
+        # 从通联数据客户端获取数据并画图
+        self.PriceW.plotHistorticData(self.instrumentid, "weekly")
+
+    def monthly(self):
+        """打开日K线图"""
+        self.chanlunEngine.writeChanlunLog(u'打开合约%s 月K线图' % (self.instrumentid))
+        self.vbox1.removeWidget(self.PriceW)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
+        self.vbox1.addWidget(self.PriceW)
+
+        # 从通联数据客户端获取数据并画图
+        self.PriceW.plotHistorticData(self.instrumentid, "monthly")
 
 
 
@@ -293,7 +329,7 @@ class ChanlunEngineManager(QtGui.QWidget):
     def updateChanlunLog(self, event):
         """更新缠论相关日志"""
         log = event.dict_['data']
-        print type(log)
+        # print type(log)
         if(log.logTime):
             content = '\t'.join([log.logTime, log.logContent])
             self.chanlunLogMonitor.append(content)
@@ -493,12 +529,20 @@ class PriceWidget(QtGui.QWidget):
                 self.num += 1
 
 
-    # 从通联数据端获取分钟数据画分钟线
-    def plotMinHistorticData(self, symbol, unit):
-        print "plotMinK start"
+    # 从通联数据端获取数据画K线
+    def plotHistorticData(self, symbol, unit):
         self.initCompleted = True
         historyDataEngine = HistoryDataEngine()
-        data = historyDataEngine.downloadFuturesIntradayBar(symbol, unit)
+
+        # unit为int型则画分钟线，为String类型画日周月线
+        if type(unit) is types.IntType:
+            data = historyDataEngine.downloadFuturesIntradayBar(symbol, unit)
+        elif type(unit) is types.StringType:
+            data = historyDataEngine.downloadFuturesBar(symbol, unit)
+        else:
+            print "参数格式错误"
+            return
+
         if data:
             for d in data:
                 self.barOpen = d.get('openPrice', 0)
@@ -509,7 +553,7 @@ class PriceWidget(QtGui.QWidget):
                 self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh, self.barOpenInterest)
                 self.num += 1
 
-        print "plotMinK success"
+        print "plotKLine success"
 
     #----------------------------------------------------------------------
     def initHistoricalData(self,startDate=None):
