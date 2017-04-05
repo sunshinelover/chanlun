@@ -145,7 +145,16 @@ class MainEngine(object):
             gateway = self.gatewayDict[gatewayName]
             gateway.subscribe(subscribeReq)
         else:
-            self.writeLog(u'接口不存在：%s' %gatewayName)        
+            self.writeLog(u'接口不存在：%s' %gatewayName)
+
+    #----------------------------------------------------------------------
+    def unsubscribe(self, unsubscribeReq, gatewayName):
+        """取消订阅行情接口"""
+        if gatewayName in self.gatewayDict:
+            gateway = self.gatewayDict[gatewayName]
+            gateway.unsubscribe(unsubscribeReq)
+        else:
+            self.writeLog(u'接口不存在：%s' %gatewayName)
         
     #----------------------------------------------------------------------
     def sendOrder(self, orderReq, gatewayName):

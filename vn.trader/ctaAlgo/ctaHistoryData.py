@@ -243,6 +243,7 @@ class HistoryDataEngine(object):
                 self.dbClient[dbname][symbol].update_one(flt, {'$set': bar.__dict__}, upsert=True)
 
             print u'%s下载完成' % symbol
+            return data
         else:
             print u'找不到合约%s' % symbol
 

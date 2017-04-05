@@ -124,6 +124,11 @@ class CtpGateway(VtGateway):
     def subscribe(self, subscribeReq):
         """订阅行情"""
         self.mdApi.subscribe(subscribeReq)
+
+    #----------------------------------------------------------------------
+    def unsubscribe(self, unsubscribeReq):
+        """取消订阅行情"""
+        self.mdApi.unsubscribe(unsubscribeReq)
         
     #----------------------------------------------------------------------
     def sendOrder(self, orderReq):
@@ -403,9 +408,16 @@ class CtpMdApi(MdApi):
         # 则先保存订阅请求，登录完成后会自动订阅
         if self.loginStatus:
             self.subscribeMarketData(str(subscribeReq.symbol))
-        self.subscribedSymbols.add(subscribeReq)   
-        
+        self.subscribedSymbols.add(subscribeReq)
+
     #----------------------------------------------------------------------
+    def unsubscribe(self, unsubscribeReq):
+        #取消订阅合约
+        if self.loginStatus:
+            self.unSubscribeMarketData(str(unsubscribeReq.symbol))
+
+
+        #----------------------------------------------------------------------
     def login(self):
         """登录"""
         # 如果填入了用户名密码等，则登录

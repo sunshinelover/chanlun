@@ -30,17 +30,17 @@ class DatayesClient(object):
     #----------------------------------------------------------------------
     def loadSetting(self):
         """载入配置"""
+        # try:
+        #     f = file(FILENAME)
+        # except IOError:
+        #     print u'%s无法打开配置文件' % self.name
+        #     return
+        #
+        # setting = json.load(f)
         try:
-            f = file(FILENAME)
-        except IOError:
-            print u'%s无法打开配置文件' % self.name
-            return
-        
-        setting = json.load(f)
-        try:
-            self.domain = str(setting['domain'])
-            self.version = str(setting['version'])
-            self.token = str(setting['token'])
+            self.domain = str("http://api.wmcloud.com/data")
+            self.version = str("v1")
+            self.token = str("99f13e8438cbbecf1f3eb894c6b58615fa1f295c7b363c0de67cd1745af19212")
         except KeyError:
             print u'%s配置文件字段缺失' % self.name
             return

@@ -170,6 +170,7 @@ class CtaEngineManager(QtGui.QWidget):
         self.setWindowTitle(u'CTA策略')
         
         # 按钮
+        testButton = QtGui.QPushButton('test')
         loadButton = QtGui.QPushButton(u'加载策略')
         initAllButton = QtGui.QPushButton(u'全部初始化')
         startAllButton = QtGui.QPushButton(u'全部启动')
@@ -191,6 +192,7 @@ class CtaEngineManager(QtGui.QWidget):
         
         # 设置布局
         hbox2 = QtGui.QHBoxLayout()
+        hbox2.addWidget(testButton)
         hbox2.addWidget(loadButton)
         hbox2.addWidget(initAllButton)
         hbox2.addWidget(startAllButton)
