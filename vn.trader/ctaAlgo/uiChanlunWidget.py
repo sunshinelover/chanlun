@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from ctaHistoryData import HistoryDataEngine
 import time
 import types
-
+import pandas as pd
 ########################################################################
 class CAxisTime(pg.AxisItem):
     ## Formats axis label to human readable time.
@@ -25,10 +25,11 @@ class CAxisTime(pg.AxisItem):
         strns = []
         for x in values:
             try:
-                strns.append(time.strftime("%H:%M:%S", time.gmtime(x)))    # time_t --> time.struct_time
+                strns.append(time.strftime("%H:%M:%S", time.gmtime(x)))  # time_t --> time.struct_time
             except ValueError:  # Windows can't handle dates before 1970
                 strns.append('')
         return strns
+
 
 ########################################################################
 class ChanlunEngineManager(QtGui.QWidget):
@@ -45,6 +46,8 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.mainEngine = mainEngine
 
         self.penLoaded = False
+        self.segmentLoaded = False
+        self.tickLoaded = False
         self.instrumentid = ''
 
         self.initUi()
@@ -165,8 +168,10 @@ class ChanlunEngineManager(QtGui.QWidget):
 
 
         #从通联数据客户端获取当日分钟数据并画图
-        self.PriceW.plotHistorticData(instrumentid, 1)
-
+        self.PriceW.plotHistorticData(instrumentid, 5)
+        self.penLoaded = False
+        self.segmentLoaded = False
+        print self.PriceW.dataTransfer()
 
 
         # 从数据库获取当日分钟数据并画图
@@ -228,6 +233,7 @@ class ChanlunEngineManager(QtGui.QWidget):
 
         # 从通联数据客户端数据并画图
         self.PriceW.plotHistorticData(self.instrumentid, 15)
+
 
     # ----------------------------------------------------------------------
     def thirtyM(self):
@@ -294,6 +300,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW.deleteLater()
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
         self.vbox1.addWidget(self.PriceW)
+        self.tickLoaded = True
 
 
 
@@ -301,6 +308,7 @@ class ChanlunEngineManager(QtGui.QWidget):
     def segment(self):
         """加载分段"""
         self.chanlunEngine.writeChanlunLog(u'分段加载成功')
+        self.segmentoaded = True
 
     # ----------------------------------------------------------------------
     def shop(self):
@@ -311,19 +319,29 @@ class ChanlunEngineManager(QtGui.QWidget):
     def restore(self):
         """还原初始k线状态"""
         self.chanlunEngine.writeChanlunLog(u'还原加载成功')
-        self.vbox1.removeWidget(self.TickW)
-        self.TickW.deleteLater()
+        if self.tickLoaded:
+            self.vbox1.removeWidget(self.TickW)
+            self.TickW.deleteLater()
+        self.vbox1.removeWidget(self.PriceW)
+        self.PriceW.deleteLater()
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
         self.vbox1.addWidget(self.PriceW)
+        self.PriceW.plotHistorticData(self.instrumentid, 5)#最后改为1分钟 测试为了速率先写5分钟
+        self.chanlunEngine.writeChanlunLog(u'还原为1分钟k线图')
+        self.penLoaded = False
+        self.segmentLoaded = False
 
     # ----------------------------------------------------------------------
     def pen(self):
         """加载分笔"""
-        if not self.pen:
-            self.chanlunEngine.loadSetting()
-     #       self.initStrategyManager()  此处应该修改成分笔的函数
-        self.pen = True
         self.chanlunEngine.writeChanlunLog(u'分笔加载成功')
+        x = [0, 20, 40, 60, 80]
+        y = [4311, 4318, 4318, 4197, 4223]
+
+
+        if not self.penLoaded:
+            self.fenbi(x, y)
+        self.penLoaded = True
 
     # ----------------------------------------------------------------------
     def updateChanlunLog(self, event):
@@ -335,6 +353,11 @@ class ChanlunEngineManager(QtGui.QWidget):
             self.chanlunLogMonitor.append(content)
         else:
             print 0
+
+    # ----------------------------------------------------------------------
+    def fenbi(self, fenxingx, fenxingy):
+        self.PriceW.pw2.plot(x=fenxingx, y=fenxingy, symbol='o')
+        self.chanlunEngine.writeChanlunLog(u'进行分笔')
 
     # ----------------------------------------------------------------------
     def registerEvent(self):
@@ -360,25 +383,17 @@ class PriceWidget(QtGui.QWidget):
             self.picture = QtGui.QPicture()
             p = QtGui.QPainter(self.picture)
             p.setPen(pg.mkPen(color='w', width=0.4))  # 0.4 means w*2
-            self.a = pg.AxisItem('bottom', pen=None, linkView=None, parent=None, maxTickLength=-5, showValues=True)
-            self.a.setFixedWidth(1)
-            self.a.setWidth(1)
-            self.a.setLabel()
-            self.a.setGrid(grid=True)
-            labelStyle = {'color': '#FFF', 'font-size': '14pt'}
-            self.a.setLabel('label text', units='V', **labelStyle)
             # w = (self.data[1][0] - self.data[0][0]) / 3.
             w = 0.2
-            for (t, open, close, min, max) in self.data:
-                p.drawLine(QtCore.QPointF(t, min), QtCore.QPointF(t, max))
+            for (n, t, open, close, min, max) in self.data:
+                p.drawLine(QtCore.QPointF(n, min), QtCore.QPointF(n, max))
                 if open > close:
                     p.setBrush(pg.mkBrush('g'))
                 else:
                     p.setBrush(pg.mkBrush('r'))
-                p.drawRect(QtCore.QRectF(t-w, open, w*2, close-open))
+                p.drawRect(QtCore.QRectF(n-w, open, w*2, close-open))
                 pg.setConfigOption('leftButtonPan', False)
             p.end()
-
         def paint(self, p, *args):
             p.drawPicture(0, 0, self.picture)
 
@@ -427,6 +442,7 @@ class PriceWidget(QtGui.QWidget):
         self.num = 0
         # 保存K线数据的列表对象
         self.listBar = []
+        self.listTime = []
         self.listClose = []
         self.listHigh = []
         self.listLow = []
@@ -467,27 +483,31 @@ class PriceWidget(QtGui.QWidget):
     def initplotKline(self):
         """Kline"""
 
-        # Tick labels
-        tr = np.arange('2016-06-10 09:00', '2016-06-10 18:00', dtype='datetime64[2h]')  # tick labels one day
-        tday0 = (tr - tr[0]) / (tr[-1] - tr[0])  # Map time to 0.0-1.0 day 2 1.0-2.0 ...
-        tday1 = tday0 + 1
-        tnorm = np.concatenate([tday0, tday1])
-        tr[-1] = tr[0]  # End day=start next day
-        # Create tick labels for axis.setTicks
-        ttick = list()
-        for i, t in enumerate(np.concatenate([tr, tr])):
-            tstr = np.datetime64(t).astype(datetime)
-            ttick.append((tnorm[i], tstr.strftime("%H:%M:%S")))
+        # # Tick labels
+        # tr = np.arange('2016-06-10 09:00', '2016-06-10 18:00', dtype='datetime64[2h]')  # tick labels one day
+        # tday0 = (tr - tr[0]) / (tr[-1] - tr[0])  # Map time to 0.0-1.0 day 2 1.0-2.0 ...
+        # tday1 = tday0 + 1
+        # tnorm = np.concatenate([tday0, tday1])
+        # tr[-1] = tr[0]  # End day=start next day
+        # # Create tick labels for axis.setTicks
+        # ttick = list()
+        # for i, t in enumerate(np.concatenate([tr, tr])):
+        #     tstr = np.datetime64(t).astype(datetime)
+        #     ttick.append((tnorm[i], tstr.strftime("%H:%M:%S")))
 
-        self.pw2 = pg.PlotWidget(name='Plot2')  # K线图
+        self.__axisTime = CAxisTime(orientation='bottom')
+        self.pw2 = pg.PlotWidget(axisItems={'bottom': self.__axisTime})  # K线图
         pw2x = self.pw2.getAxis('bottom')  # This is the trick
         pw2x.setGrid(150)
-        pw2x.setTicks([ttick])
         pw2y = self.pw2.getAxis('left')
         pw2y.setGrid(150)
+        # pw2x.setTicks([ttick])
 
-        self.pw2.setRange(xRange=[1, 350], padding=None, update=True)
-        self.pw2.x()
+        # self.pw2.setRange(xRange=[1, 350], padding=None, update=True)
+        dates = np.arange(8) * (3600 * 24 * 356)
+        # print dates
+        # print self.barTime
+        self.pw2.plot(x=dates)
         self.vbl_1.addWidget(self.pw2)
         self.pw2.setMinimumWidth(1500)
         self.pw2.setMaximumWidth(1800)
@@ -505,12 +525,7 @@ class PriceWidget(QtGui.QWidget):
         # self.arrow = pg.ArrowItem()
         # self.pw2.addItem(self.arrow)
 
-        # self.__axisTime = CAxisTime(orientation='bottom')
-        self.d = self.pw2.plotItem
-        # d.setLabels(axisItems={'bottom': self.__axisTime})
-        # self.pw2.addPlot(axisItems={'bottom': self.__axisTime}) # __plot : PlotItem
-
-        # self.b = pg.PlotDataItem(x=self.barTime)
+        pw = pg.PlotWidget()
 
     # 从数据库读取一分钟数据画分钟线
     def plotMin(self, symbol):
@@ -550,7 +565,14 @@ class PriceWidget(QtGui.QWidget):
                 self.barLow = d.get('lowPrice', 0)
                 self.barHigh = d.get('highPrice', 0)
                 self.barOpenInterest = d.get('openInterest', 0)
-                self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh, self.barOpenInterest)
+                if type(unit) is types.StringType:
+                    if unit == "daily":
+                        self.barTime = d.get('tradeDate', '').replace('-', '')
+                    else:
+                        self.barTime = d.get('endDate', '').replace('-', '')
+                else:
+                    self.barTime = d.get('barTime', '')
+                self.onBar(self.num, self.barTime, self.barOpen, self.barClose, self.barLow, self.barHigh, self.barOpenInterest)
                 self.num += 1
 
         print "plotKLine success"
@@ -628,11 +650,11 @@ class PriceWidget(QtGui.QWidget):
 
             # 画K线
             self.pw2.removeItem(self.candle)
+            self.pw2.plot(x=self.listTime)
             self.candle = self.CandlestickItem(self.listBar)
             self.pw2.addItem(self.candle)
             self.plotText()   # 显示开仓信号位置
 
-            # ----------------------------------------------------------------------
 
     #----------------------------------------------------------------------
     def plotText(self):
@@ -799,8 +821,9 @@ class PriceWidget(QtGui.QWidget):
                 self.barOpenInterest = tick.openInterest
 
     #----------------------------------------------------------------------
-    def onBar(self, n, o, c, l, h, oi):
-        self.listBar.append((n, o, c, l, h))
+    def onBar(self, n, t, o, c, l, h, oi):
+        self.listBar.append((n, t, o, c, l, h))
+        self.listTime.append(t)
         self.listOpen.append(o)
         self.listClose.append(c)
         self.listHigh.append(h)
@@ -858,6 +881,17 @@ class PriceWidget(QtGui.QWidget):
         #     return cx
         # else:
         #     return None
+
+    #----------------------------------------------------------------------
+    # 分笔前将listBar中的数据转换成DataFrame格式
+    def dataTransfer(self):
+        listTemp = []
+        for i in range(0, len(self.listBar) / 20):
+            listTemp.append(self.listBar[i * 20])
+        df = pd.DataFrame(listTemp, columns=['num', 'time', 'open', 'close', 'high', 'low'])
+        df.index = df['time'].tolist()
+        df = df.drop('time', 1)
+        return df
 
     #----------------------------------------------------------------------
     def registerEvent(self):

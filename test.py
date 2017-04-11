@@ -21,7 +21,7 @@ def main():
     win.plot(xx,yy)
 
     # Tick labels
-    tr=np.arange('2016-06-10 09:00', '2016-06-11 18:00', dtype='datetime64[2h]') # tick labels one day
+    tr=np.arange('2016-06-10 09:00', '2016-06-10 19:00', dtype='datetime64[2h]') # tick labels one day
     tday0=(tr-tr[0])/(tr[-1]-tr[0])  #Map time to 0.0-1.0 day 2 1.0-2.0 ...
     tday1=tday0+1
     tnorm=np.concatenate([tday0,tday1])
