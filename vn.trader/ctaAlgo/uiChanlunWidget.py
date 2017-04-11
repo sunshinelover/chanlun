@@ -233,6 +233,7 @@ class ChanlunEngineManager(QtGui.QWidget):
 
         # 从通联数据客户端数据并画图
         self.PriceW.plotHistorticData(self.instrumentid, 15)
+        self.penLoaded = False
 
 
     # ----------------------------------------------------------------------
@@ -245,7 +246,7 @@ class ChanlunEngineManager(QtGui.QWidget):
 
         # 从通联数据客户端获取数据并画图
         self.PriceW.plotHistorticData(self.instrumentid, 30)
-
+        self.penLoaded = False
 
     # ----------------------------------------------------------------------
     def sixtyM(self):
@@ -257,6 +258,7 @@ class ChanlunEngineManager(QtGui.QWidget):
 
         # 从通联数据客户端获取数据并画图
         self.PriceW.plotHistorticData(self.instrumentid, 60)
+        self.penLoaded = False
 
         # ----------------------------------------------------------------------
 
@@ -269,6 +271,7 @@ class ChanlunEngineManager(QtGui.QWidget):
 
         # 从通联数据客户端获取数据并画图
         self.PriceW.plotHistorticData(self.instrumentid, "daily")
+        self.penLoaded = False
 
     def weekly(self):
         """打开日K线图"""
@@ -279,6 +282,7 @@ class ChanlunEngineManager(QtGui.QWidget):
 
         # 从通联数据客户端获取数据并画图
         self.PriceW.plotHistorticData(self.instrumentid, "weekly")
+        self.penLoaded = False
 
     def monthly(self):
         """打开日K线图"""
@@ -289,8 +293,7 @@ class ChanlunEngineManager(QtGui.QWidget):
 
         # 从通联数据客户端获取数据并画图
         self.PriceW.plotHistorticData(self.instrumentid, "monthly")
-
-
+        self.penLoaded = False
 
     # ----------------------------------------------------------------------
     def openTick(self):
@@ -301,8 +304,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
         self.vbox1.addWidget(self.PriceW)
         self.tickLoaded = True
-
-
+        self.penLoaded = False
 
     # ----------------------------------------------------------------------
     def segment(self):
@@ -504,10 +506,10 @@ class PriceWidget(QtGui.QWidget):
         # pw2x.setTicks([ttick])
 
         # self.pw2.setRange(xRange=[1, 350], padding=None, update=True)
-        dates = np.arange(8) * (3600 * 24 * 356)
+        # dates = np.arange(8) * (3600 * 24 * 356)
         # print dates
         # print self.barTime
-        self.pw2.plot(x=dates)
+        # self.pw2.plot(x=self.barTime)
         self.vbl_1.addWidget(self.pw2)
         self.pw2.setMinimumWidth(1500)
         self.pw2.setMaximumWidth(1800)
