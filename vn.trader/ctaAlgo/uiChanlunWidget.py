@@ -16,20 +16,6 @@ import time
 import types
 import pandas as pd
 ########################################################################
-class CAxisTime(pg.AxisItem):
-    ## Formats axis label to human readable time.
-    # @param[in] values List of \c time_t.
-    # @param[in] scale Not used.
-    # @param[in] spacing Not used.
-    def tickStrings(self, values, scale, spacing):
-        strns = []
-        for x in values:
-            try:
-                strns.append(time.strftime("%H:%M:%S", time.gmtime(x)))    # time_t --> time.struct_time
-            except ValueError:  # Windows can't handle dates before 1970
-                strns.append('')
-        return strns
-
 class MyStringAxis(pg.AxisItem):
     def __init__(self, xdict, *args, **kwargs):
         pg.AxisItem.__init__(self, *args, **kwargs)
@@ -50,6 +36,7 @@ class MyStringAxis(pg.AxisItem):
                 vstr = ""
             strings.append(vstr)
         return strings
+
 ########################################################################
 class ChanlunEngineManager(QtGui.QWidget):
     """chanlun引擎管理组件"""
@@ -83,12 +70,12 @@ class ChanlunEngineManager(QtGui.QWidget):
 
         # 期货代码输入框
         self.codeEdit = QtGui.QLineEdit()
-        self.codeEdit.setPlaceholderText(u'ag1706')
+        self.codeEdit.setPlaceholderText(u'在此输入期货代码')
         self.codeEdit.setMaximumWidth(200)
-        self.instrumentid = 'ag1706'
+        self.data = pd.DataFrame() #画图所需数据, 重要
 
         # 金融图
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 1)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
 
 
         # 按钮
@@ -127,11 +114,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         weekButton = QtGui.QPushButton(u'周')
         monthButton = QtGui.QPushButton(u'月')
 
-
         oneMButton.checked = True
-        # oneMButton.setStyleSheet("QPushButton{background-color:#0099FF;}"
-        #                        "QPushButton:hover{background-color:#333333;}")
-
 
         self.vbox1 = QtGui.QVBoxLayout()
 
@@ -172,29 +155,69 @@ class ChanlunEngineManager(QtGui.QWidget):
 
         self.codeEdit.returnPressed.connect(self.updateSymbol)
 
-    def updateSymbol(self):
-        """合约变化"""
-        # 读取组件数据
+    #-----------------------------------------------------------------------
+    #从通联数据端获取历史数据
+    def downloadData(self, symbol, unit):
+        listBar = [] #K线数据
+        num = 0
+        #从通联客户端获取K线数据
+        historyDataEngine = HistoryDataEngine()
+        # unit为int型获取分钟数据，为String类型获取日周月K线数据
+        if type(unit) is types.IntType:
+            data = historyDataEngine.downloadFuturesIntradayBar(symbol, unit)
+        elif type(unit) is types.StringType:
+            data = historyDataEngine.downloadFuturesBar(symbol, unit)
+        else:
+            print "参数格式错误"
+            return
 
+        if data:
+            for d in data:
+                barOpen = d.get('openPrice', 0)
+                barClose = d.get('closePrice', 0)
+                if type(unit) is types.StringType:
+                    barLow = d.get('lowestPrice', 0)
+                    barHigh = d.get('highestPrice', 0)
+                    if unit == "daily":
+                        barTime = d.get('tradeDate', '').replace('-', '')
+                    else:
+                        barTime = d.get('endDate', '').replace('-', '')
+                else:
+                    barLow = d.get('lowPrice', 0)
+                    barHigh = d.get('highPrice', 0)
+                    barTime = d.get('barTime', '')
+                listBar.append((num, barTime, barOpen, barClose, barLow, barHigh))
+                num += 1
+
+        if unit == "monthly":
+            listBar.reverse()
+
+        #将List数据转换成dataFormat类型，方便处理
+        df = pd.DataFrame(listBar, columns=['num', 'time', 'open', 'close', 'low', 'high'])
+        df.index = df['time'].tolist()
+        df = df.drop('time', 1)
+        return df
+
+    #----------------------------------------------------------------------------------
+    #"""合约变化"""
+    def updateSymbol(self):
+        # 读取组件数据
         instrumentid = str(self.codeEdit.text())
 
         self.chanlunEngine.writeChanlunLog(u'查询合约%s' % (instrumentid))
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 1分钟K线图' % (instrumentid))
 
+        # 从通联数据客户端获取当日分钟数据
+        self.data = self.downloadData(instrumentid, 1)
+
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, instrumentid, 1)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
-
-
-        #从通联数据客户端获取当日分钟数据并画图
-        # self.PriceW.plotHistorticData(instrumentid, 5)
-        # self.PriceW.initplotKline(instrumentid, 5)
-
+        #画K线图
+        self.PriceW.plotHistorticData()
 
         self.penLoaded = False
         self.segmentLoaded = False
-        print self.PriceW.dataTransfer()
-
 
         # 从数据库获取当日分钟数据并画图
         # self.PriceW.plotMin(instrumentid)
@@ -225,123 +248,155 @@ class ChanlunEngineManager(QtGui.QWidget):
     def oneM(self):
         "打开1分钟K线图"
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 1分钟K线图' % (self.instrumentid))
+        # 从通联数据客户端获取数据
+        self.data = self.downloadData(self.instrumentid, 1)
+
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 1)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
-        # 从通联数据客户端获取数据并画图
-        # self.PriceW.plotHistorticData(self.instrumentid, 1)
+        # 画K线图
+        self.PriceW.plotHistorticData()
+
         self.penLoaded = False
 
     # ----------------------------------------------------------------------
     def fiveM(self):
         "打开5分钟K线图"
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 5分钟K线图' % (self.instrumentid))
+
+        # 从通联数据客户端获取数据
+        self.data = self.downloadData(self.instrumentid, 5)
+
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 5)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
-        # 从通联数据客户端获取数据并画图
-        # self.PriceW.plotHistorticData(self.instrumentid, 5)
+        # 画K线图
+        self.PriceW.plotHistorticData()
+
         self.penLoaded = False
+
 
     # ----------------------------------------------------------------------
     def fifteenM(self):
         "打开15分钟K线图"
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 15分钟K线图' % (self.instrumentid))
+
+        # 从通联数据客户端获取数据
+        self.data = self.downloadData(self.instrumentid, 15)
+
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 15)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
-        # 从通联数据客户端数据并画图
-        # self.PriceW.plotHistorticData(self.instrumentid, 15)
+        # 画K线图
+        self.PriceW.plotHistorticData()
+
         self.penLoaded = False
 
     # ----------------------------------------------------------------------
     def thirtyM(self):
         "打开30分钟K线图"
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 30分钟K线图' % (self.instrumentid))
+        # 从通联数据客户端获取数据
+        self.data = self.downloadData(self.instrumentid, 30)
+
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 30)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
-        # 从通联数据客户端获取数据并画图
-        # self.PriceW.plotHistorticData(self.instrumentid, 30)
+        # 画K线图
+        self.PriceW.plotHistorticData()
+
+        # 画K线图
+        self.PriceW.plotHistorticData()
+
         self.penLoaded = False
+
 
     # ----------------------------------------------------------------------
     def sixtyM(self):
         "打开60分钟K线图"
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 60分钟K线图' % (self.instrumentid))
+        # 从通联数据客户端获取数据
+        self.data = self.downloadData(self.instrumentid, 60)
+
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 60)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
-        # 从通联数据客户端获取数据并画图
-        # self.PriceW.plotHistorticData(self.instrumentid, 60)
+        # 画K线图
+        self.PriceW.plotHistorticData()
+
         self.penLoaded = False
 
 
-        # ----------------------------------------------------------------------
-
+    # ----------------------------------------------------------------------
     def daily(self):
         """打开日K线图"""
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 日K线图' % (self.instrumentid))
+        # 从通联数据客户端获取数据
+        self.data = self.downloadData(self.instrumentid, "daily")
+
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 'daily')
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
-        # 从通联数据客户端获取数据并画图
-        # self.PriceW.plotHistorticData(self.instrumentid, "daily")
+        # 画K线图
+        self.PriceW.plotHistorticData()
+
         self.penLoaded = False
-
-
-        # ----------------------------------------------------------------------
-
+        
+    # ----------------------------------------------------------------------
     def weekly(self):
         """打开周K线图"""
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 周K线图' % (self.instrumentid))
+        # 从通联数据客户端获取数据
+        self.data = self.downloadData(self.instrumentid, "weekly")
+        
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, "weekly")
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
-        # 从通联数据客户端获取数据并画图
-        # self.PriceW.plotHistorticData(self.instrumentid, "weekly")
+        # 画K线图
+        self.PriceW.plotHistorticData()
+        
         self.penLoaded = False
-
+    
     def monthly(self):
         """打开月K线图"""
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 月K线图' % (self.instrumentid))
+        # 从通联数据客户端获取数据并画图
+        self.data = self.downloadData(self.instrumentid, "monthly")
+        
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 'monthly')
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
-        # 从通联数据客户端获取数据并画图
-        # self.PriceW.plotHistorticData(self.instrumentid, "monthly")
+        # 画K线图
+        self.PriceW.plotHistorticData()
+        
         self.penLoaded = False
-
     # ----------------------------------------------------------------------
     def openTick(self):
         """切换成tick图"""
         self.chanlunEngine.writeChanlunLog(u'打开tick图')
         self.vbox1.removeWidget(self.PriceW)
         self.PriceW.deleteLater()
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, self)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data, self)
         self.vbox1.addWidget(self.PriceW)
         self.tickLoaded = True
         self.penLoaded = False
-
     # ----------------------------------------------------------------------
     def segment(self):
         """加载分段"""
         self.chanlunEngine.writeChanlunLog(u'分段加载成功')
         self.segmentoLaded = True
-
     # ----------------------------------------------------------------------
     def shop(self):
         """加载买卖点"""
         self.chanlunEngine.writeChanlunLog(u'买卖点加载成功')
-
     # ----------------------------------------------------------------------
     def restore(self):
         """还原初始k线状态"""
@@ -351,53 +406,45 @@ class ChanlunEngineManager(QtGui.QWidget):
             self.TickW.deleteLater()
         self.vbox1.removeWidget(self.PriceW)
         self.PriceW.deleteLater()
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, self)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data, self)
         self.vbox1.addWidget(self.PriceW)
         self.PriceW.plotHistorticData(self.instrumentid, 5)#最后改为1分钟 测试为了速率先写5分钟
         self.chanlunEngine.writeChanlunLog(u'还原为1分钟k线图')
         self.penLoaded = False
         self.segmentLoaded = False
-
     # ----------------------------------------------------------------------
     def pen(self):
         """加载分笔"""
         # 先合并K线数据,记录新建PriceW之前合并K线的数据
         if not self.penLoaded:
-            self.PriceW.judgeInclude()
-            print "judgeInclude success"
-            oldData = self.PriceW.after_fenxing
+            after_fenxing = self.judgeInclude() #判断self.data中K线数据的包含关系
 
-            #清空画布时先remove已有的Widget再新建
+            # 清空画布时先remove已有的Widget再新建
             self.vbox1.removeWidget(self.PriceW)
-            self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, "pen")
-
-            #将合并K线的数据赋值给新建的PriceW
-            self.PriceW.after_fenxing = oldData
-
+            self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, after_fenxing)
             self.vbox1.addWidget(self.PriceW)
 
-            #使用合并K线的数据重新画K线图，并将顶底连线分笔
-            self.PriceW.plotAfterFenXing()
+            #使用合并K线的数据重新画K线图
+            self.plotAfterFenXing(after_fenxing)
+            print after_fenxing
+
+            # 找出顶和底
+            fenxing_data = self.findTopAndLow(after_fenxing)
+
+            print fenxing_data
 
             self.chanlunEngine.writeChanlunLog(u'分笔加载成功')
-            print 'fenxingdata',self.PriceW.fenxing_data
-            arrayFenxingdata = np.array(self.PriceW.fenxing_data)
-
-            #fenbiX为num，即第几根k线
+            arrayFenxingdata = np.array(fenxing_data)
             fenbiX = [m[0] for m in arrayFenxingdata]
-
-            #fenbiY1为收盘价，fenbiY2为开盘价，fenbiY最后存储两者平均值
+            print 'x', fenbiX
             fenbiY1 = [m[2] for m in arrayFenxingdata]
             fenbiY2 = [m[1] for m in arrayFenxingdata]
             fenbiY = []
             for i in xrange(len(fenbiY1)):
                 fenbiY.append((fenbiY1[i] +fenbiY2[i])/2)
-
-
             if not self.penLoaded:
                 self.fenbi(fenbiX, fenbiY)
             self.penLoaded = True
-
     # ----------------------------------------------------------------------
     def updateChanlunLog(self, event):
         """更新缠论相关日志"""
@@ -408,12 +455,151 @@ class ChanlunEngineManager(QtGui.QWidget):
             self.chanlunLogMonitor.append(content)
         else:
             print 0
-
     # ----------------------------------------------------------------------
     def fenbi(self, fenbix, fenbiy):
         self.PriceW.pw2.plot(x=fenbix, y=fenbiy, symbol='o')
         self.chanlunEngine.writeChanlunLog(u'进行分笔')
+    
+    # ----------------------------------------------------------------------
+    # 判断包含关系，仿照聚框，合并K线数据
+    def judgeInclude(self):
+        ## 判断包含关系
+        k_data = self.data
+        # 保存分型后dataFrame的值
+        after_fenxing = pd.DataFrame()
+        temp_data = k_data[:1]
+        zoushi = [3]  # 3-持平 4-向下 5-向上
+        for i in xrange(len(k_data)):
+            case1_1 = temp_data.high[-1] > k_data.high[i] and temp_data.low[-1] < k_data.low[i]  # 第1根包含第2根
+            case1_2 = temp_data.high[-1] > k_data.high[i] and temp_data.low[-1] == k_data.low[i]  # 第1根包含第2根
+            case1_3 = temp_data.high[-1] == k_data.high[i] and temp_data.low[-1] < k_data.low[i]  # 第1根包含第2根
+            case2_1 = temp_data.high[-1] < k_data.high[i] and temp_data.low[-1] > k_data.low[i]  # 第2根包含第1根
+            case2_2 = temp_data.high[-1] < k_data.high[i] and temp_data.low[-1] == k_data.low[i]  # 第2根包含第1根
+            case2_3 = temp_data.high[-1] == k_data.high[i] and temp_data.low[-1] > k_data.low[i]  # 第2根包含第1根
+            case3 = temp_data.high[-1] == k_data.high[i] and temp_data.low[-1] == k_data.low[i]  # 第1根等于第2根
+            case4 = temp_data.high[-1] > k_data.high[i] and temp_data.low[-1] > k_data.low[i]  # 向下趋势
+            case5 = temp_data.high[-1] < k_data.high[i] and temp_data.low[-1] < k_data.low[i]  # 向上趋势
+            if case1_1 or case1_2 or case1_3:
+                if zoushi[-1] == 4:
+                    temp_data.iloc[0, 4] = k_data.high[i]
+                else:
+                    temp_data.iloc[0, 3] = k_data.low[i]
 
+            elif case2_1 or case2_2 or case2_3:
+                temp_temp = temp_data[-1:]
+                temp_data = k_data[i:i + 1]
+                if zoushi[-1] == 4:
+                    temp_data.iloc[0, 4] = temp_temp.high[0]
+                else:
+                    temp_data.iloc[0, 3] = temp_temp.low[0]
+
+            elif case3:
+                zoushi.append(3)
+                pass
+
+            elif case4:
+                zoushi.append(4)
+                after_fenxing = pd.concat([after_fenxing, temp_data], axis=0)
+                temp_data = k_data[i:i + 1]
+
+            elif case5:
+                zoushi.append(5)
+                after_fenxing = pd.concat([after_fenxing, temp_data], axis=0)
+                temp_data = k_data[i:i + 1]
+        return after_fenxing
+
+    # ----------------------------------------------------------------------
+    #画出合并后的K线图，分笔
+    def plotAfterFenXing(self, after_fenxing):
+        #判断包含关系，合并K线
+        for i in xrange(len(after_fenxing)):
+            #处理k线的最大最小值、开盘收盘价，合并后k线不显示影线。
+            after_fenxing.iloc[i, 0] = i
+            if after_fenxing.open[i] > after_fenxing.close[i]:
+                after_fenxing.iloc[i, 1] = after_fenxing.high[i]
+                after_fenxing.iloc[i, 2] = after_fenxing.low[i]
+            else:
+                after_fenxing.iloc[i, 1] = after_fenxing.low[i]
+                after_fenxing.iloc[i, 2] = after_fenxing.high[i]
+            self.PriceW.onBarAfterFenXing(i, after_fenxing.index[i], after_fenxing.open[i], after_fenxing.close[i], after_fenxing.low[i], after_fenxing.high[i])
+        print "plotKLine after fenxing"
+
+    # ----------------------------------------------------------------------
+    # 找出顶和底
+    def findTopAndLow(self, after_fenxing):
+        temp_num = 0  # 上一个顶或底的位置
+        temp_high = 0  # 上一个顶的high值
+        temp_low = 0  # 上一个底的low值
+        temp_type = 0  # 上一个记录位置的类型
+        i = 1
+        fenxing_type = []  # 记录分型点的类型，1为顶分型，-1为底分型
+        fenxing_data = pd.DataFrame() # 分型点的DataFrame值
+        while (i < len(after_fenxing) - 1):
+            case1 = after_fenxing.high[i - 1] < after_fenxing.high[i] and after_fenxing.high[i] > after_fenxing.high[i + 1]  # 顶分型
+            case2 = after_fenxing.low[i - 1] > after_fenxing.low[i] and after_fenxing.low[i] < after_fenxing.low[i + 1]  # 底分型
+            if case1:
+                if temp_type == 1:  # 如果上一个分型为顶分型，则进行比较，选取高点更高的分型
+                    if after_fenxing.high[i] <= temp_high:
+                        i += 1
+                    else:
+                        temp_high = after_fenxing.high[i]
+                        temp_num = i
+                        temp_type = 1
+                        i += 4
+                elif temp_type == 2:  # 如果上一个分型为底分型，则记录上一个分型，用当前分型与后面的分型比较，选取同向更极端的分型
+                    if temp_low >= after_fenxing.high[i]:  # 如果上一个底分型的底比当前顶分型的顶高，则跳过当前顶分型。
+                        i += 1
+                    else:
+                        fenxing_type.append(-1)
+                        fenxing_data = pd.concat([fenxing_data, after_fenxing[temp_num:temp_num + 1]], axis=0)
+                        temp_high = after_fenxing.high[i]
+                        temp_num = i
+                        temp_type = 1
+                        i += 4
+                else:
+                    temp_high = after_fenxing.high[i]
+                    temp_num = i
+                    temp_type = 1
+                    i += 4
+
+            elif case2:
+                if temp_type == 2:  # 如果上一个分型为底分型，则进行比较，选取低点更低的分型
+                    if after_fenxing.low[i] >= temp_low:
+                        i += 1
+                    else:
+                        temp_low = after_fenxing.low[i]
+                        temp_num = i
+                        temp_type = 2
+                        i += 4
+                elif temp_type == 1:  # 如果上一个分型为顶分型，则记录上一个分型，用当前分型与后面的分型比较，选取同向更极端的分型
+                    if temp_high <= after_fenxing.low[i]:  # 如果上一个顶分型的底比当前底分型的底低，则跳过当前底分型。
+                        i += 1
+                    else:
+                        fenxing_type.append(1)
+                        fenxing_data = pd.concat([fenxing_data, after_fenxing[temp_num:temp_num + 1]], axis=0)
+                        temp_low = after_fenxing.low[i]
+                        temp_num = i
+                        temp_type = 2
+                        i += 4
+                else:
+                    temp_low = after_fenxing.low[i]
+                    temp_num = i
+                    temp_type = 2
+                    i += 4
+            else:
+                i += 1
+
+        if fenxing_type:
+            if fenxing_type[-1] == 1 and temp_type == 2:
+                fenxing_type.append(-1)
+                fenxing_data = pd.concat([fenxing_data, after_fenxing[temp_num:temp_num + 1]], axis=0)
+
+            if fenxing_type[-1] == -1 and temp_type == 1:
+                fenxing_type.append(1)
+                fenxing_data = pd.concat([fenxing_data, after_fenxing[temp_num:temp_num + 1]], axis=0)
+
+        print fenxing_type
+        return fenxing_data
     # ----------------------------------------------------------------------
     def registerEvent(self):
         """注册事件监听"""
@@ -460,7 +646,7 @@ class PriceWidget(QtGui.QWidget):
             return QtCore.QRectF(self.picture.boundingRect())
 
     #----------------------------------------------------------------------
-    def __init__(self, eventEngine, chanlunEngine, symbol, unit, parent=None):
+    def __init__(self, eventEngine, chanlunEngine, data, parent=None):
         """Constructor"""
         super(PriceWidget, self).__init__(parent)
 
@@ -488,28 +674,12 @@ class PriceWidget(QtGui.QWidget):
         self.listfastEMA = []
         self.listslowEMA = []
 
-        # K线缓存对象
-        self.barOpen = 0
-        self.barHigh = 0
-        self.barLow = 0
-        self.barClose = 0
-        self.barTime = None
-        self.num = 0
         # 保存K线数据的列表对象
         self.listBar = []
-        self.listTime = []
         self.listClose = []
         self.listHigh = []
         self.listLow = []
         self.listOpen = []
-
-        self.axistime = []
-
-        #保存分型后dataFrame的值
-        self.after_fenxing = pd.DataFrame()
-
-        # 顶底的dataFrame的值
-        self.fenxing_data = pd.DataFrame()  # 分型点的DataFrame值
 
         # 是否完成了历史数据的读取
         self.initCompleted = False
@@ -518,8 +688,7 @@ class PriceWidget(QtGui.QWidget):
 
         self.__eventEngine = eventEngine
         self.__mainEngine = chanlunEngine
-        self.symbol = symbol
-        self.unit = unit
+        self.data = data  #画图所需数据
         # MongoDB数据库相关
         self.__mongoConnected = False
         self.__mongoConnection = None
@@ -542,60 +711,17 @@ class PriceWidget(QtGui.QWidget):
         self.setLayout(self.vbl_1)
 
     #----------------------------------------------------------------------
-    #画K线图
     def initplotKline(self):
-        s = []  #横坐标轴值
-        if self.unit == "pen":
-
-
-        else:
-            data = self.downloadHistorticData()
-            time = ''
-            if data:
-                for d in data:
-                    if type(self.unit) is types.StringType:
-                        if self.unit == "daily":
-                            time = d.get('tradeDate', '').replace('-', '')
-                            print "time", time
-                        else:
-                            time = d.get('endDate', '').replace('-', '')
-                    else:
-                        time = d.get('barTime', '')
-                    s.append(time)
-
-        # s = [u'21:00', u'21:05', u'21:10', u'21:15', u'21:20', u'21:25', u'21:30', u'21:35', u'21:40', u'21:45',
-        #      u'21:50',
-        #      u'21:55', u'22:00', u'22:05', u'22:10', u'22:15', u'22:20', u'22:25', u'22:30', u'22:35', u'22:40',
-        #      u'22:45',
-        #      u'22:50', u'22:55', u'23:00', u'23:05', u'23:10', u'23:15', u'23:20', u'23:25', u'23:30', u'23:35',
-        #      u'23:40',
-        #      u'23:45', u'23:50', u'23:55', u'00:00', u'00:05', u'00:10', u'00:15', u'00:20', u'00:25', u'00:30',
-        #      u'00:35',
-        #      u'00:40', u'00:45', u'00:50', u'00:55', u'01:00', u'01:05', u'01:10', u'01:15', u'01:20', u'01:25',
-        #      u'01:30',
-        #      u'01:35', u'01:40', u'01:45', u'01:50', u'01:55', u'02:00', u'02:05', u'02:10', u'02:15', u'02:20',
-        #      u'02:25',
-        #      u'02:30', u'09:05', u'09:10', u'09:15', u'09:20', u'09:25', u'09:30', u'09:35', u'09:40', u'09:45',
-        #      u'09:50',
-        #      u'09:55', u'10:00', u'10:05', u'10:10', u'10:15', u'10:35', u'10:40', u'10:45', u'10:50', u'10:55',
-        #      u'11:00',
-        #      u'11:05', u'11:10', u'11:15', u'11:20', u'11:25', u'11:30', u'13:35', u'13:40', u'13:45', u'13:50',
-        #      u'13:55',
-        #      u'14:00', u'14:05', u'14:10', u'14:15', u'14:20', u'14:25', u'14:30', u'14:35', u'14:40', u'14:45',
-        #      u'14:50',
-        #      u'14:55', u'15:00']
-        print 'self.axistime',s
+        """Kline"""
+        s = self.data.index  #横坐标值
+        print 'self.axistime', s
         xdict = dict(enumerate(s))
-        self.__axisTime = MyStringAxis(xdict,orientation='bottom')
+        self.__axisTime = MyStringAxis(xdict, orientation='bottom')
         self.pw2 = pg.PlotWidget(axisItems={'bottom': self.__axisTime})  # K线图
         pw2x = self.pw2.getAxis('bottom')
-        pw2x.setGrid(150)   # 设置默认x轴网格
+        pw2x.setGrid(150)  # 设置默认x轴网格
         pw2y = self.pw2.getAxis('left')
-        pw2y.setGrid(150)   # 设置默认y轴网格
-
-        dates = np.arange(8) * (3600 * 24 * 356)
-        self.pw2.plot(x=dates)
-
+        pw2y.setGrid(150)  # 设置默认y轴网格
         self.vbl_1.addWidget(self.pw2)
         self.pw2.setMinimumWidth(1500)
         self.pw2.setMaximumWidth(1800)
@@ -606,7 +732,6 @@ class PriceWidget(QtGui.QWidget):
         self.curve5 = self.pw2.plot()
         self.curve6 = self.pw2.plot()
 
-
         self.candle = self.CandlestickItem(self.listBar)
         self.pw2.addItem(self.candle)
         ## Draw an arrowhead next to the text box
@@ -614,25 +739,6 @@ class PriceWidget(QtGui.QWidget):
         # self.pw2.addItem(self.arrow)
 
         pw = pg.PlotWidget()
-
-        if data:
-            for d in data:
-                self.barOpen = d.get('openPrice', 0)
-                self.barClose = d.get('closePrice', 0)
-                if type(self.unit) is types.StringType:
-                    self.barLow = d.get('lowestPrice', 0)
-                    self.barHigh = d.get('highestPrice', 0)
-                    if self.unit == "daily":
-                        self.barTime = d.get('tradeDate', '').replace('-', '')
-                    else:
-                        self.barTime = d.get('endDate', '').replace('-', '')
-                else:
-                    self.barLow = d.get('lowPrice', 0)
-                    self.barHigh = d.get('highPrice', 0)
-                    self.barTime = d.get('barTime', '')
-                self.onBar(self.num, self.barTime, self.barOpen, self.barClose, self.barLow, self.barHigh)
-                self.num += 1
-        print "plotKLine success"
 
     # 从数据库读取一分钟数据画分钟线
     def plotMin(self, symbol):
@@ -651,20 +757,12 @@ class PriceWidget(QtGui.QWidget):
                 self.num += 1
 
 
-    # 从通联数据端获取数据画K线
-    def downloadHistorticData(self):
+    # 画历史数据K线图
+    def plotHistorticData(self):
         self.initCompleted = True
-        historyDataEngine = HistoryDataEngine()
-
-        # unit为int型则画分钟线，为String类型画日周月线
-        if type(self.unit) is types.IntType:
-            data = historyDataEngine.downloadFuturesIntradayBar(self.symbol, self.unit)
-        elif type(self.unit) is types.StringType:
-            data = historyDataEngine.downloadFuturesBar(self.symbol, self.unit)
-        else:
-            print "参数格式错误"
-            return
-        return data
+        for i in xrange(len(self.data)):
+            self.onBar(i, self.data.index[i], self.data.open[i], self.data.close[i], self.data.low[i], self.data.high[i])
+        print "plotKLine success"
 
     #----------------------------------------------------------------------
     def initHistoricalData(self,startDate=None):
@@ -736,8 +834,10 @@ class PriceWidget(QtGui.QWidget):
             # 均线
             self.curve5.setData(self.listfastEMA, pen=(255, 0, 0), name="Red curve")
             self.curve6.setData(self.listslowEMA, pen=(0, 255, 0), name="Green curve")
+
             # 画K线
             self.pw2.removeItem(self.candle)
+            #？？self.pw2.plot(x=self.listTime)
             self.candle = self.CandlestickItem(self.listBar)
             self.pw2.addItem(self.candle)
             self.plotText()   # 显示开仓信号位置
@@ -908,7 +1008,6 @@ class PriceWidget(QtGui.QWidget):
     #----------------------------------------------------------------------
     def onBar(self, n, t, o, c, l, h):
         self.listBar.append((n, t, o, c, l, h))
-        self.listTime.append(t)
         self.listOpen.append(o)
         self.listClose.append(c)
         self.listHigh.append(h)
@@ -931,11 +1030,6 @@ class PriceWidget(QtGui.QWidget):
     #画合并后的K线Bar
     def onBarAfterFenXing(self, n, t, o, c, l, h):
         self.listBar.append((n, t, o, c, l, h))
-        self.listTime.append(t)
-        self.listOpen.append(o)
-        self.listClose.append(c)
-        self.listHigh.append(h)
-        self.listLow.append(l)
 
         # 画K线
         self.pw2.removeItem(self.candle)
@@ -982,158 +1076,11 @@ class PriceWidget(QtGui.QWidget):
         #     return None
 
     #----------------------------------------------------------------------
-
-
-    #----------------------------------------------------------------------
     def registerEvent(self):
         """注册事件监听"""
         print "connect"
         self.signal.connect(self.updateMarketData)
         self.__eventEngine.register(EVENT_MARKETDATA, self.signal.emit)
-
-    # ----------------------------------------------------------------------
-    #分笔前将listBar中的数据转换成DataFrame格式
-    def dataTransfer(self):
-        df = pd.DataFrame(self.listBar, columns=['num', 'time', 'open', 'close', 'low', 'high'])
-        df.index = df['time'].tolist()
-        df = df.drop('time', 1)
-        return df
-
-    # ----------------------------------------------------------------------
-    # #判断包含关系，仿照聚框，合并K线数据
-    def judgeInclude(self):
-        ## 判断包含关系
-        k_data = self.dataTransfer()
-        temp_data = k_data[:1]
-        zoushi = [3]  # 3-持平 4-向下 5-向上
-        for i in xrange(len(k_data)):
-            case1_1 = temp_data.high[-1] > k_data.high[i] and temp_data.low[-1] < k_data.low[i]  # 第1根包含第2根
-            case1_2 = temp_data.high[-1] > k_data.high[i] and temp_data.low[-1] == k_data.low[i]  # 第1根包含第2根
-            case1_3 = temp_data.high[-1] == k_data.high[i] and temp_data.low[-1] < k_data.low[i]  # 第1根包含第2根
-            case2_1 = temp_data.high[-1] < k_data.high[i] and temp_data.low[-1] > k_data.low[i]  # 第2根包含第1根
-            case2_2 = temp_data.high[-1] < k_data.high[i] and temp_data.low[-1] == k_data.low[i]  # 第2根包含第1根
-            case2_3 = temp_data.high[-1] == k_data.high[i] and temp_data.low[-1] > k_data.low[i]  # 第2根包含第1根
-            case3 = temp_data.high[-1] == k_data.high[i] and temp_data.low[-1] == k_data.low[i]  # 第1根等于第2根
-            case4 = temp_data.high[-1] > k_data.high[i] and temp_data.low[-1] > k_data.low[i]  # 向下趋势
-            case5 = temp_data.high[-1] < k_data.high[i] and temp_data.low[-1] < k_data.low[i]  # 向上趋势
-            if case1_1 or case1_2 or case1_3:
-                if zoushi[-1] == 4:
-                    temp_data.iloc[0, 4] = k_data.high[i]
-                else:
-                    temp_data.iloc[0, 3] = k_data.low[i]
-
-            elif case2_1 or case2_2 or case2_3:
-                temp_temp = temp_data[-1:]
-                temp_data = k_data[i:i + 1]
-                if zoushi[-1] == 4:
-                    temp_data.iloc[0, 4] = temp_temp.high[0]
-                else:
-                    temp_data.iloc[0, 3] = temp_temp.low[0]
-
-            elif case3:
-                zoushi.append(3)
-                pass
-
-            elif case4:
-                zoushi.append(4)
-                self.after_fenxing = pd.concat([self.after_fenxing, temp_data], axis=0)
-                temp_data = k_data[i:i + 1]
-
-            elif case5:
-                zoushi.append(5)
-                self.after_fenxing = pd.concat([self.after_fenxing, temp_data], axis=0)
-                temp_data = k_data[i:i + 1]
-
-    # ----------------------------------------------------------------------
-    #画出合并后的K线图，分笔
-    def plotAfterFenXing(self):
-        #判断包含关系，合并K线
-        for i in xrange(len(self.after_fenxing)):
-            #处理k线的最大最小值、开盘收盘价，合并后k线不显示影线。
-            self.after_fenxing.iloc[i, 0] = i
-            if self.after_fenxing.open[i] > self.after_fenxing.close[i]:
-                self.after_fenxing.iloc[i, 1] = self.after_fenxing.high[i]
-                self.after_fenxing.iloc[i, 2] = self.after_fenxing.low[i]
-            else:
-                self.after_fenxing.iloc[i, 1] = self.after_fenxing.low[i]
-                self.after_fenxing.iloc[i, 2] = self.after_fenxing.high[i]
-            self.onBarAfterFenXing(i, self.after_fenxing.index[i], self.after_fenxing.open[i], self.after_fenxing.close[i], self.after_fenxing.low[i], self.after_fenxing.high[i])
-        print "plotKLine after fenxing"
-        print self.after_fenxing
-        #找出顶和底
-        self.findTopAndLow()
-
-    # ----------------------------------------------------------------------
-    # 找出顶和底
-    def findTopAndLow(self):
-        temp_num = 0  # 上一个顶或底的位置
-        temp_high = 0  # 上一个顶的high值
-        temp_low = 0  # 上一个底的low值
-        temp_type = 0  # 上一个记录位置的类型
-        i = 1
-        fenxing_type = []  # 记录分型点的类型，1为顶分型，-1为底分型
-        fenxing_plot = []  # 记录点的数值，为顶分型取high值，为底分型取low值
-        # fenxing_data = pd.DataFrame()  # 分型点的DataFrame值
-        while (i < len(self.after_fenxing) - 1):
-            case1 = self.after_fenxing.high[i - 1] < self.after_fenxing.high[i] and self.after_fenxing.high[i] > self.after_fenxing.high[i + 1]  # 顶分型
-            case2 = self.after_fenxing.low[i - 1] > self.after_fenxing.low[i] and self.after_fenxing.low[i] < self.after_fenxing.low[i + 1]  # 底分型
-            if case1:
-                if temp_type == 1:  # 如果上一个分型为顶分型，则进行比较，选取高点更高的分型
-                    if self.after_fenxing.high[i] <= temp_high:
-                        i += 1
-                        #                 continue
-                    else:
-                        temp_high = self.after_fenxing.high[i]
-                        temp_num = i
-                        temp_type = 1
-                elif temp_type == 2:  # 如果上一个分型为底分型，则记录上一个分型，用当前分型与后面的分型比较，选取同向更极端的分型
-                    if temp_low >= self.after_fenxing.high[i]:  # 如果上一个底分型的底比当前顶分型的顶高，则跳过当前顶分型。
-                        i += 1
-                    else:
-                        fenxing_type.append(-1)
-                        self.fenxing_data = pd.concat([self.fenxing_data, self.after_fenxing[temp_num:temp_num + 1]], axis=0)
-                        fenxing_plot.append(self.after_fenxing.high[i])
-                        temp_high = self.after_fenxing.high[i]
-                        temp_num = i
-                        temp_type = 1
-                        i += 4
-                else:
-                    temp_high = self.after_fenxing.high[i]
-                    temp_num = i
-                    temp_type = 1
-                    i += 4
-
-            elif case2:
-                if temp_type == 2:  # 如果上一个分型为底分型，则进行比较，选取低点更低的分型
-                    if self.after_fenxing.low[i] >= temp_low:
-                        i += 1
-                        #                 continue
-                    else:
-                        temp_low = self.after_fenxing.low[i]
-                        temp_num = i
-                        temp_type = 2
-                        i += 4
-                elif temp_type == 1:  # 如果上一个分型为顶分型，则记录上一个分型，用当前分型与后面的分型比较，选取同向更极端的分型
-                    if temp_high <= self.after_fenxing.low[i]:  # 如果上一个顶分型的底比当前底分型的底低，则跳过当前底分型。
-                        i += 1
-                    else:
-                        fenxing_type.append(1)
-                        self.fenxing_data = pd.concat([self.fenxing_data, self.after_fenxing[temp_num:temp_num + 1]], axis=0)
-                        fenxing_plot.append(self.after_fenxing.low[i])
-                        temp_low = self.after_fenxing.low[i]
-                        temp_num = i
-                        temp_type = 2
-                        i += 4
-                else:
-                    temp_high = self.after_fenxing.low[i]
-                    temp_num = i
-                    temp_type = 2
-
-            else:
-                i += 1
-        print fenxing_type
-        print self.fenxing_data
-
 
 
 ########################################################################
