@@ -30,6 +30,26 @@ class CAxisTime(pg.AxisItem):
                 strns.append('')
         return strns
 
+class MyStringAxis(pg.AxisItem):
+    def __init__(self, xdict, *args, **kwargs):
+        pg.AxisItem.__init__(self, *args, **kwargs)
+        self.x_values = np.asarray(xdict.keys())
+        self.x_strings = xdict.values()
+
+    def tickStrings(self, values, scale, spacing):
+        strings = []
+        for v in values:
+            # vs is the original tick value
+            vs = v * scale
+            # if we have vs in our values, show the string
+            # otherwise show nothing
+            if vs in self.x_values:
+                # Find the string with x_values closest to vs
+                vstr = self.x_strings[np.abs(self.x_values - vs).argmin()]
+            else:
+                vstr = ""
+            strings.append(vstr)
+        return strings
 ########################################################################
 class ChanlunEngineManager(QtGui.QWidget):
     """chanlun引擎管理组件"""
@@ -63,12 +83,12 @@ class ChanlunEngineManager(QtGui.QWidget):
 
         # 期货代码输入框
         self.codeEdit = QtGui.QLineEdit()
-        self.codeEdit.setPlaceholderText(u'在此输入期货代码')
+        self.codeEdit.setPlaceholderText(u'ag1706')
         self.codeEdit.setMaximumWidth(200)
-        self.codeEditText = self.codeEdit.text()
+        self.instrumentid = 'ag1706'
 
         # 金融图
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText,self)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 1)
 
 
         # 按钮
@@ -162,12 +182,15 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 1分钟K线图' % (instrumentid))
 
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, instrumentid, 1)
         self.vbox1.addWidget(self.PriceW)
 
 
         #从通联数据客户端获取当日分钟数据并画图
-        self.PriceW.plotHistorticData(instrumentid, 5)
+        # self.PriceW.plotHistorticData(instrumentid, 5)
+        # self.PriceW.initplotKline(instrumentid, 5)
+
+
         self.penLoaded = False
         self.segmentLoaded = False
         print self.PriceW.dataTransfer()
@@ -203,37 +226,35 @@ class ChanlunEngineManager(QtGui.QWidget):
         "打开1分钟K线图"
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 1分钟K线图' % (self.instrumentid))
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 1)
         self.vbox1.addWidget(self.PriceW)
 
         # 从通联数据客户端获取数据并画图
-        self.PriceW.plotHistorticData(self.instrumentid, 1)
+        # self.PriceW.plotHistorticData(self.instrumentid, 1)
         self.penLoaded = False
-
 
     # ----------------------------------------------------------------------
     def fiveM(self):
         "打开5分钟K线图"
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 5分钟K线图' % (self.instrumentid))
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 5)
         self.vbox1.addWidget(self.PriceW)
 
         # 从通联数据客户端获取数据并画图
-        self.PriceW.plotHistorticData(self.instrumentid, 5)
+        # self.PriceW.plotHistorticData(self.instrumentid, 5)
         self.penLoaded = False
-
 
     # ----------------------------------------------------------------------
     def fifteenM(self):
         "打开15分钟K线图"
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 15分钟K线图' % (self.instrumentid))
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 15)
         self.vbox1.addWidget(self.PriceW)
 
         # 从通联数据客户端数据并画图
-        self.PriceW.plotHistorticData(self.instrumentid, 15)
+        # self.PriceW.plotHistorticData(self.instrumentid, 15)
         self.penLoaded = False
 
     # ----------------------------------------------------------------------
@@ -241,24 +262,23 @@ class ChanlunEngineManager(QtGui.QWidget):
         "打开30分钟K线图"
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 30分钟K线图' % (self.instrumentid))
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 30)
         self.vbox1.addWidget(self.PriceW)
 
         # 从通联数据客户端获取数据并画图
-        self.PriceW.plotHistorticData(self.instrumentid, 30)
+        # self.PriceW.plotHistorticData(self.instrumentid, 30)
         self.penLoaded = False
-
 
     # ----------------------------------------------------------------------
     def sixtyM(self):
         "打开60分钟K线图"
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 60分钟K线图' % (self.instrumentid))
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 60)
         self.vbox1.addWidget(self.PriceW)
 
         # 从通联数据客户端获取数据并画图
-        self.PriceW.plotHistorticData(self.instrumentid, 60)
+        # self.PriceW.plotHistorticData(self.instrumentid, 60)
         self.penLoaded = False
 
 
@@ -268,38 +288,37 @@ class ChanlunEngineManager(QtGui.QWidget):
         """打开日K线图"""
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 日K线图' % (self.instrumentid))
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 'daily')
         self.vbox1.addWidget(self.PriceW)
 
         # 从通联数据客户端获取数据并画图
-        self.PriceW.plotHistorticData(self.instrumentid, "daily")
+        # self.PriceW.plotHistorticData(self.instrumentid, "daily")
         self.penLoaded = False
 
 
         # ----------------------------------------------------------------------
+
     def weekly(self):
         """打开周K线图"""
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 周K线图' % (self.instrumentid))
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, "weekly")
         self.vbox1.addWidget(self.PriceW)
 
         # 从通联数据客户端获取数据并画图
-        self.PriceW.plotHistorticData(self.instrumentid, "weekly")
+        # self.PriceW.plotHistorticData(self.instrumentid, "weekly")
         self.penLoaded = False
 
     def monthly(self):
         """打开月K线图"""
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 月K线图' % (self.instrumentid))
         self.vbox1.removeWidget(self.PriceW)
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, 'monthly')
         self.vbox1.addWidget(self.PriceW)
 
         # 从通联数据客户端获取数据并画图
-        self.PriceW.plotHistorticData(self.instrumentid, "monthly")
+        # self.PriceW.plotHistorticData(self.instrumentid, "monthly")
         self.penLoaded = False
-
-
 
     # ----------------------------------------------------------------------
     def openTick(self):
@@ -307,12 +326,10 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.chanlunEngine.writeChanlunLog(u'打开tick图')
         self.vbox1.removeWidget(self.PriceW)
         self.PriceW.deleteLater()
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, self)
         self.vbox1.addWidget(self.PriceW)
         self.tickLoaded = True
         self.penLoaded = False
-
-
 
     # ----------------------------------------------------------------------
     def segment(self):
@@ -334,7 +351,7 @@ class ChanlunEngineManager(QtGui.QWidget):
             self.TickW.deleteLater()
         self.vbox1.removeWidget(self.PriceW)
         self.PriceW.deleteLater()
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
+        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, self)
         self.vbox1.addWidget(self.PriceW)
         self.PriceW.plotHistorticData(self.instrumentid, 5)#最后改为1分钟 测试为了速率先写5分钟
         self.chanlunEngine.writeChanlunLog(u'还原为1分钟k线图')
@@ -352,7 +369,7 @@ class ChanlunEngineManager(QtGui.QWidget):
 
             #清空画布时先remove已有的Widget再新建
             self.vbox1.removeWidget(self.PriceW)
-            self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.codeEditText, self)
+            self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.instrumentid, "pen")
 
             #将合并K线的数据赋值给新建的PriceW
             self.PriceW.after_fenxing = oldData
@@ -364,12 +381,12 @@ class ChanlunEngineManager(QtGui.QWidget):
 
             self.chanlunEngine.writeChanlunLog(u'分笔加载成功')
             print 'fenxingdata',self.PriceW.fenxing_data
-            # x = self.PriceW.fenxing_data[['num']]
-            # print 'x',x
             arrayFenxingdata = np.array(self.PriceW.fenxing_data)
-            print  arrayFenxingdata
+
+            #fenbiX为num，即第几根k线
             fenbiX = [m[0] for m in arrayFenxingdata]
-            print 'x', fenbiX
+
+            #fenbiY1为收盘价，fenbiY2为开盘价，fenbiY最后存储两者平均值
             fenbiY1 = [m[2] for m in arrayFenxingdata]
             fenbiY2 = [m[1] for m in arrayFenxingdata]
             fenbiY = []
@@ -443,7 +460,7 @@ class PriceWidget(QtGui.QWidget):
             return QtCore.QRectF(self.picture.boundingRect())
 
     #----------------------------------------------------------------------
-    def __init__(self, eventEngine, chanlunEngine, symbol, parent=None):
+    def __init__(self, eventEngine, chanlunEngine, symbol, unit, parent=None):
         """Constructor"""
         super(PriceWidget, self).__init__(parent)
 
@@ -486,6 +503,8 @@ class PriceWidget(QtGui.QWidget):
         self.listLow = []
         self.listOpen = []
 
+        self.axistime = []
+
         #保存分型后dataFrame的值
         self.after_fenxing = pd.DataFrame()
 
@@ -499,8 +518,8 @@ class PriceWidget(QtGui.QWidget):
 
         self.__eventEngine = eventEngine
         self.__mainEngine = chanlunEngine
-        # self.symbol = symbol
-        self.symbol = 'ag1706'
+        self.symbol = symbol
+        self.unit = unit
         # MongoDB数据库相关
         self.__mongoConnected = False
         self.__mongoConnection = None
@@ -523,34 +542,60 @@ class PriceWidget(QtGui.QWidget):
         self.setLayout(self.vbl_1)
 
     #----------------------------------------------------------------------
+    #画K线图
     def initplotKline(self):
-        """Kline"""
+        s = []  #横坐标轴值
+        if self.unit == "pen":
 
-        # # Tick labels
-        # tr = np.arange('2016-06-10 09:00', '2016-06-10 18:00', dtype='datetime64[2h]')  # tick labels one day
-        # tday0 = (tr - tr[0]) / (tr[-1] - tr[0])  # Map time to 0.0-1.0 day 2 1.0-2.0 ...
-        # tday1 = tday0 + 1
-        # tnorm = np.concatenate([tday0, tday1])
-        # tr[-1] = tr[0]  # End day=start next day
-        # # Create tick labels for axis.setTicks
-        # ttick = list()
-        # for i, t in enumerate(np.concatenate([tr, tr])):
-        #     tstr = np.datetime64(t).astype(datetime)
-        #     ttick.append((tnorm[i], tstr.strftime("%H:%M:%S")))
 
-        self.__axisTime = CAxisTime(orientation='bottom')
+        else:
+            data = self.downloadHistorticData()
+            time = ''
+            if data:
+                for d in data:
+                    if type(self.unit) is types.StringType:
+                        if self.unit == "daily":
+                            time = d.get('tradeDate', '').replace('-', '')
+                            print "time", time
+                        else:
+                            time = d.get('endDate', '').replace('-', '')
+                    else:
+                        time = d.get('barTime', '')
+                    s.append(time)
+
+        # s = [u'21:00', u'21:05', u'21:10', u'21:15', u'21:20', u'21:25', u'21:30', u'21:35', u'21:40', u'21:45',
+        #      u'21:50',
+        #      u'21:55', u'22:00', u'22:05', u'22:10', u'22:15', u'22:20', u'22:25', u'22:30', u'22:35', u'22:40',
+        #      u'22:45',
+        #      u'22:50', u'22:55', u'23:00', u'23:05', u'23:10', u'23:15', u'23:20', u'23:25', u'23:30', u'23:35',
+        #      u'23:40',
+        #      u'23:45', u'23:50', u'23:55', u'00:00', u'00:05', u'00:10', u'00:15', u'00:20', u'00:25', u'00:30',
+        #      u'00:35',
+        #      u'00:40', u'00:45', u'00:50', u'00:55', u'01:00', u'01:05', u'01:10', u'01:15', u'01:20', u'01:25',
+        #      u'01:30',
+        #      u'01:35', u'01:40', u'01:45', u'01:50', u'01:55', u'02:00', u'02:05', u'02:10', u'02:15', u'02:20',
+        #      u'02:25',
+        #      u'02:30', u'09:05', u'09:10', u'09:15', u'09:20', u'09:25', u'09:30', u'09:35', u'09:40', u'09:45',
+        #      u'09:50',
+        #      u'09:55', u'10:00', u'10:05', u'10:10', u'10:15', u'10:35', u'10:40', u'10:45', u'10:50', u'10:55',
+        #      u'11:00',
+        #      u'11:05', u'11:10', u'11:15', u'11:20', u'11:25', u'11:30', u'13:35', u'13:40', u'13:45', u'13:50',
+        #      u'13:55',
+        #      u'14:00', u'14:05', u'14:10', u'14:15', u'14:20', u'14:25', u'14:30', u'14:35', u'14:40', u'14:45',
+        #      u'14:50',
+        #      u'14:55', u'15:00']
+        print 'self.axistime',s
+        xdict = dict(enumerate(s))
+        self.__axisTime = MyStringAxis(xdict,orientation='bottom')
         self.pw2 = pg.PlotWidget(axisItems={'bottom': self.__axisTime})  # K线图
-        pw2x = self.pw2.getAxis('bottom')  # This is the trick
-        pw2x.setGrid(150)
+        pw2x = self.pw2.getAxis('bottom')
+        pw2x.setGrid(150)   # 设置默认x轴网格
         pw2y = self.pw2.getAxis('left')
-        pw2y.setGrid(150)
-        # pw2x.setTicks([ttick])
+        pw2y.setGrid(150)   # 设置默认y轴网格
 
-        # self.pw2.setRange(xRange=[1, 350], padding=None, update=True)
         dates = np.arange(8) * (3600 * 24 * 356)
-        # print dates
-        # print self.barTime
         self.pw2.plot(x=dates)
+
         self.vbl_1.addWidget(self.pw2)
         self.pw2.setMinimumWidth(1500)
         self.pw2.setMaximumWidth(1800)
@@ -570,6 +615,25 @@ class PriceWidget(QtGui.QWidget):
 
         pw = pg.PlotWidget()
 
+        if data:
+            for d in data:
+                self.barOpen = d.get('openPrice', 0)
+                self.barClose = d.get('closePrice', 0)
+                if type(self.unit) is types.StringType:
+                    self.barLow = d.get('lowestPrice', 0)
+                    self.barHigh = d.get('highestPrice', 0)
+                    if self.unit == "daily":
+                        self.barTime = d.get('tradeDate', '').replace('-', '')
+                    else:
+                        self.barTime = d.get('endDate', '').replace('-', '')
+                else:
+                    self.barLow = d.get('lowPrice', 0)
+                    self.barHigh = d.get('highPrice', 0)
+                    self.barTime = d.get('barTime', '')
+                self.onBar(self.num, self.barTime, self.barOpen, self.barClose, self.barLow, self.barHigh)
+                self.num += 1
+        print "plotKLine success"
+
     # 从数据库读取一分钟数据画分钟线
     def plotMin(self, symbol):
         self.initCompleted = True
@@ -588,38 +652,19 @@ class PriceWidget(QtGui.QWidget):
 
 
     # 从通联数据端获取数据画K线
-    def plotHistorticData(self, symbol, unit):
+    def downloadHistorticData(self):
         self.initCompleted = True
         historyDataEngine = HistoryDataEngine()
 
         # unit为int型则画分钟线，为String类型画日周月线
-        if type(unit) is types.IntType:
-            data = historyDataEngine.downloadFuturesIntradayBar(symbol, unit)
-        elif type(unit) is types.StringType:
-            data = historyDataEngine.downloadFuturesBar(symbol, unit)
+        if type(self.unit) is types.IntType:
+            data = historyDataEngine.downloadFuturesIntradayBar(self.symbol, self.unit)
+        elif type(self.unit) is types.StringType:
+            data = historyDataEngine.downloadFuturesBar(self.symbol, self.unit)
         else:
             print "参数格式错误"
             return
-
-        if data:
-            for d in data:
-                self.barOpen = d.get('openPrice', 0)
-                self.barClose = d.get('closePrice', 0)
-                if type(unit) is types.StringType:
-                    self.barLow = d.get('lowestPrice', 0)
-                    self.barHigh = d.get('highestPrice', 0)
-                    if unit == "daily":
-                        self.barTime = d.get('tradeDate', '').replace('-', '')
-                    else:
-                        self.barTime = d.get('endDate', '').replace('-', '')
-                else:
-                    self.barLow = d.get('lowPrice', 0)
-                    self.barHigh = d.get('highPrice', 0)
-                    self.barTime = d.get('barTime', '')
-                self.onBar(self.num, self.barTime, self.barOpen, self.barClose, self.barLow, self.barHigh)
-                self.num += 1
-
-        print "plotKLine success"
+        return data
 
     #----------------------------------------------------------------------
     def initHistoricalData(self,startDate=None):
@@ -691,10 +736,8 @@ class PriceWidget(QtGui.QWidget):
             # 均线
             self.curve5.setData(self.listfastEMA, pen=(255, 0, 0), name="Red curve")
             self.curve6.setData(self.listslowEMA, pen=(0, 255, 0), name="Green curve")
-
             # 画K线
             self.pw2.removeItem(self.candle)
-            #？？self.pw2.plot(x=self.listTime)
             self.candle = self.CandlestickItem(self.listBar)
             self.pw2.addItem(self.candle)
             self.plotText()   # 显示开仓信号位置

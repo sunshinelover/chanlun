@@ -1,47 +1,41 @@
-''' Setting x-axis labels for time series
-Window, pyqtgraph (09.10) numpy (1.11.1) PyQt4(4.11.4)
-'''
-
-import datetime as dt
-from pyqtgraph.Qt import QtGui, QtCore
-import numpy as np
-import pyqtgraph as pg
-
-def main():
-    app = QtGui.QApplication([])
-    #Plot some data for 2 days
-    x=np.arange(0.0, 1.0, 0.02)
-    day0=100*np.sin(2*np.pi*x)   # Just som data to plot
-    day1=100*(np.cos(2*np.pi*x)-1)   # Just som data to plot
-    xx=np.concatenate([x,x+1]) # two days
-    yy=np.concatenate([day0,day1])
-
-    win = pg.PlotWidget(title="Plotting time series")
-    win.resize(1600,400)
-    win.plot(xx,yy)
-
-    # Tick labels
-    tr=np.arange('2016-06-10 09:00', '2016-06-10 19:00', dtype='datetime64[2h]') # tick labels one day
-    tday0=(tr-tr[0])/(tr[-1]-tr[0])  #Map time to 0.0-1.0 day 2 1.0-2.0 ...
-    tday1=tday0+1
-    tnorm=np.concatenate([tday0,tday1])
-    tr[-1]=tr[0]  # End day=start next day
-    # Create tick labels for axis.setTicks
-    ttick=list()
-    for i,t in enumerate(np.concatenate([tr,tr])):
-        tstr=np.datetime64(t).astype(dt.datetime)
-        ttick.append(  (tnorm[i],  tstr.strftime("%H:%M:%S")))
-
-    ax=win.getAxis('bottom')    #This is the trick
-    ax.setTicks([ttick])
-
-    # Set grid x and y-axis
-    ax.setGrid(255)
-    ay=win.getAxis('left')
-    ay.setGrid(255)
-
-    win.show()
-    app.exec_()
+# from PyQt4 import QtCore
+# import pyqtgraph as pg
+# import numpy as np
+#
+#
+# class MyStringAxis(pg.AxisItem):
+#     def __init__(self, xdict, *args, **kwargs):
+#         pg.AxisItem.__init__(self, *args, **kwargs)
+#         self.x_values = np.asarray(xdict.keys())
+#         self.x_strings = xdict.values()
+#
+#     def tickStrings(self, values, scale, spacing):
+#         strings = []
+#         for v in values:
+#             # vs is the original tick value
+#             vs = v * scale
+#             # if we have vs in our values, show the string
+#             # otherwise show nothing
+#             if vs in self.x_values:
+#                 # Find the string with x_values closest to vs
+#                 vstr = self.x_strings[np.abs(self.x_values - vs).argmin()]
+#             else:
+#                 vstr = ""
+#             strings.append(vstr)
+#         return strings
+#
+#
+# x = [u'21:00', u'21:05', u'21:10', u'21:15', u'21:20', u'21:25']
+# # y = [1, 2, 3, 4, 5, 6]
+# xdict = dict(enumerate(x))
+#
+# win = pg.GraphicsWindow()
+# stringaxis = MyStringAxis(xdict, orientation='bottom')
+# plot = win.addPlot(axisItems={'bottom': stringaxis})
+# # curve = plot.plot(xdict.keys(), y)
 
 if __name__ == '__main__':
-    main()
+    unit = 1
+    print unit
+    unit = 'daily'
+    print unit
