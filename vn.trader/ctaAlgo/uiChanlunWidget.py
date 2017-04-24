@@ -12,7 +12,6 @@ import pymongo
 from pymongo.errors import *
 from datetime import datetime, timedelta
 from ctaHistoryData import HistoryDataEngine
-import time
 import types
 import pandas as pd
 ########################################################################
@@ -88,6 +87,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         segmentButton.clicked.connect(self.segment)
         shopButton.clicked.connect(self.shop)
         restoreButton.clicked.connect(self.restore)
+
 
         # Chanlun组件的日志监控
         self.chanlunLogMonitor = QtGui.QTextEdit()
@@ -211,6 +211,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.data = self.downloadData(instrumentid, 1)
 
         self.vbox1.removeWidget(self.PriceW)
+        self.PriceW.deleteLater()
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
         #画K线图
@@ -252,6 +253,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.data = self.downloadData(self.instrumentid, 1)
 
         self.vbox1.removeWidget(self.PriceW)
+        self.PriceW.deleteLater()
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
@@ -269,6 +271,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.data = self.downloadData(self.instrumentid, 5)
 
         self.vbox1.removeWidget(self.PriceW)
+        self.PriceW.deleteLater()
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
@@ -287,6 +290,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.data = self.downloadData(self.instrumentid, 15)
 
         self.vbox1.removeWidget(self.PriceW)
+        self.PriceW.deleteLater()
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
@@ -303,11 +307,9 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.data = self.downloadData(self.instrumentid, 30)
 
         self.vbox1.removeWidget(self.PriceW)
+        self.PriceW.deleteLater()
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
-
-        # 画K线图
-        self.PriceW.plotHistorticData()
 
         # 画K线图
         self.PriceW.plotHistorticData()
@@ -323,6 +325,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.data = self.downloadData(self.instrumentid, 60)
 
         self.vbox1.removeWidget(self.PriceW)
+        self.PriceW.deleteLater()
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
@@ -340,6 +343,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.data = self.downloadData(self.instrumentid, "daily")
 
         self.vbox1.removeWidget(self.PriceW)
+        self.PriceW.deleteLater()
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
@@ -356,6 +360,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.data = self.downloadData(self.instrumentid, "weekly")
         
         self.vbox1.removeWidget(self.PriceW)
+        self.PriceW.deleteLater()
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
@@ -371,6 +376,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.data = self.downloadData(self.instrumentid, "monthly")
         
         self.vbox1.removeWidget(self.PriceW)
+        self.PriceW.deleteLater()
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
@@ -421,6 +427,7 @@ class ChanlunEngineManager(QtGui.QWidget):
 
             # 清空画布时先remove已有的Widget再新建
             self.vbox1.removeWidget(self.PriceW)
+            self.PriceW.deleteLater()
             self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, after_fenxing)
             self.vbox1.addWidget(self.PriceW)
 
@@ -429,19 +436,23 @@ class ChanlunEngineManager(QtGui.QWidget):
             print after_fenxing
 
             # 找出顶和底
-            fenxing_data = self.findTopAndLow(after_fenxing)
+            fenxing_data, fenxing_type = self.findTopAndLow(after_fenxing)
 
             print fenxing_data
 
             self.chanlunEngine.writeChanlunLog(u'分笔加载成功')
             arrayFenxingdata = np.array(fenxing_data)
+            arrayTypedata = np.array(fenxing_type)
             fenbiX = [m[0] for m in arrayFenxingdata]
             print 'x', fenbiX
-            fenbiY1 = [m[2] for m in arrayFenxingdata]
-            fenbiY2 = [m[1] for m in arrayFenxingdata]
+            fenbiY1 = [m[4] for m in arrayFenxingdata]   #顶分型标志最高价
+            fenbiY2 = [m[3] for m in arrayFenxingdata]   #底分型标志最低价
             fenbiY = []
-            for i in xrange(len(fenbiY1)):
-                fenbiY.append((fenbiY1[i] +fenbiY2[i])/2)
+            for i in xrange(len(fenbiX)):
+                if arrayTypedata[i] == 1:
+                    fenbiY.append(fenbiY1[i])
+                else:
+                    fenbiY.append(fenbiY2[i])
             if not self.penLoaded:
                 self.fenbi(fenbiX, fenbiY)
             self.penLoaded = True
@@ -457,7 +468,11 @@ class ChanlunEngineManager(QtGui.QWidget):
             print 0
     # ----------------------------------------------------------------------
     def fenbi(self, fenbix, fenbiy):
-        self.PriceW.pw2.plot(x=fenbix, y=fenbiy, symbol='o')
+        # self.PriceW.pw2.plot(x=fenbix, y=fenbiy, symbol='o')
+        p = QtGui.QPainter(QtGui.QPicture.picture)
+        p.setPen(pg.mkPen(color=(200, 200, 255), style=QtCore.Qt.DotLine))  # 0.4 means w*2
+        for i in xrange(len(fenbix)-1):
+            p.drawLine(QtCore.QPointF(fenbix[i], fenbiy[i]), QtCore.QPointF(fenbix[i+1], fenbiy[i+1]))
         self.chanlunEngine.writeChanlunLog(u'进行分笔')
     
     # ----------------------------------------------------------------------
@@ -599,7 +614,7 @@ class ChanlunEngineManager(QtGui.QWidget):
                 fenxing_data = pd.concat([fenxing_data, after_fenxing[temp_num:temp_num + 1]], axis=0)
 
         print fenxing_type
-        return fenxing_data
+        return fenxing_data, fenxing_type
     # ----------------------------------------------------------------------
     def registerEvent(self):
         """注册事件监听"""
@@ -611,7 +626,6 @@ class PriceWidget(QtGui.QWidget):
     """用于显示价格走势图"""
     signal = QtCore.pyqtSignal(type(Event()))
     symbol = ''
-
     class CandlestickItem(pg.GraphicsObject):
         def __init__(self, data):
             pg.GraphicsObject.__init__(self)
@@ -686,6 +700,9 @@ class PriceWidget(QtGui.QWidget):
         # 初始化时读取的历史数据的起始日期(可以选择外部设置)
         self.startDate = None
 
+        self.vLine = pg.InfiniteLine(angle=90, movable=False)
+        self.hLine = pg.InfiniteLine(angle=0, movable=False)
+
         self.__eventEngine = eventEngine
         self.__mainEngine = chanlunEngine
         self.data = data  #画图所需数据
@@ -725,7 +742,6 @@ class PriceWidget(QtGui.QWidget):
         self.vbl_1.addWidget(self.pw2)
         self.pw2.setMinimumWidth(1500)
         self.pw2.setMaximumWidth(1800)
-        # self.vbl_1.setStretchFactor(self.pw2,-1)
         self.pw2.setDownsampling(mode='peak')
         self.pw2.setClipToView(True)
 
@@ -738,7 +754,6 @@ class PriceWidget(QtGui.QWidget):
         # self.arrow = pg.ArrowItem()
         # self.pw2.addItem(self.arrow)
 
-        pw = pg.PlotWidget()
 
     # 从数据库读取一分钟数据画分钟线
     def plotMin(self, symbol):
@@ -1005,6 +1020,7 @@ class PriceWidget(QtGui.QWidget):
                 self.barClose = tick.lastPrice
                 self.barTime = self.ticktime
 
+
     #----------------------------------------------------------------------
     def onBar(self, n, t, o, c, l, h):
         self.listBar.append((n, t, o, c, l, h))
@@ -1074,6 +1090,8 @@ class PriceWidget(QtGui.QWidget):
         #     return cx
         # else:
         #     return None
+
+
 
     #----------------------------------------------------------------------
     def registerEvent(self):

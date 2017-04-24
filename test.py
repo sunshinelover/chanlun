@@ -1,41 +1,65 @@
-# from PyQt4 import QtCore
-# import pyqtgraph as pg
-# import numpy as np
-#
-#
-# class MyStringAxis(pg.AxisItem):
-#     def __init__(self, xdict, *args, **kwargs):
-#         pg.AxisItem.__init__(self, *args, **kwargs)
-#         self.x_values = np.asarray(xdict.keys())
-#         self.x_strings = xdict.values()
-#
-#     def tickStrings(self, values, scale, spacing):
-#         strings = []
-#         for v in values:
-#             # vs is the original tick value
-#             vs = v * scale
-#             # if we have vs in our values, show the string
-#             # otherwise show nothing
-#             if vs in self.x_values:
-#                 # Find the string with x_values closest to vs
-#                 vstr = self.x_strings[np.abs(self.x_values - vs).argmin()]
-#             else:
-#                 vstr = ""
-#             strings.append(vstr)
-#         return strings
-#
-#
-# x = [u'21:00', u'21:05', u'21:10', u'21:15', u'21:20', u'21:25']
-# # y = [1, 2, 3, 4, 5, 6]
-# xdict = dict(enumerate(x))
-#
-# win = pg.GraphicsWindow()
-# stringaxis = MyStringAxis(xdict, orientation='bottom')
-# plot = win.addPlot(axisItems={'bottom': stringaxis})
-# # curve = plot.plot(xdict.keys(), y)
+from pyqtgraph.Qt import QtGui, QtCore
+import numpy as np
+import pyqtgraph as pg
 
+#QtGui.QApplication.setGraphicsSystem('raster')
+app = QtGui.QApplication([])
+mainwindow = QtGui.QMainWindow()
+mainwindow.setWindowTitle('pyqtgraph example: PlotWidget')
+mainwindow.resize(1000,800)
+cw = QtGui.QWidget()
+mainwindow.setCentralWidget(cw)
+
+gridlayout = QtGui.QGridLayout()
+cw.setLayout(gridlayout)
+
+# define plot windows
+signalgraph = pg.PlotWidget(name='Signalgraph')
+win = pg.GraphicsWindow()
+label = pg.LabelItem(justify='right')
+win.addItem(label)
+# set position and size of plot windows
+gridlayout.addWidget(signalgraph,0,0)
+
+mainwindow.show()
+
+
+# sample data
+x = [0,1,2,3,4,5,6,7,8,9,10]
+y = [0,0,0,8,8,8,9,9,9,0,0]
+
+# plot 1
+curve = pg.PlotCurveItem(x,y[:-1],pen='w',stepMode=True)
+signalgraph.addItem(curve)
+
+#cross hair in signalgraph
+vLine = pg.InfiniteLine(angle=90, movable=False)
+hLine = pg.InfiniteLine(angle=0, movable=False)
+signalgraph.addItem(vLine, ignoreBounds=True)
+signalgraph.addItem(hLine, ignoreBounds=True)
+
+# Here I am not sure what to do ...
+vb = signalgraph.plotItem.vb
+##vb = pg.ViewBox()
+
+
+def mouseMoved(evt):
+    pos = evt[0]
+    if signalgraph.sceneBoundingRect().contains(pos):
+        mousePoint = vb.mapSceneToView(pos)
+        index = int(mousePoint.x())
+        if index > 0 and index < len(x):
+            print  mousePoint.x(), y[index]
+        vLine.setPos(mousePoint.x())
+        hLine.setPos(mousePoint.y())
+
+
+proxy = pg.SignalProxy(signalgraph.scene().sigMouseMoved, rateLimit=60, slot=mouseMoved)
+signalgraph.scene().sigMouseMoved.connect(mouseMoved)
+
+
+# Start Qt event loop unless running in interactive mode or using pyside.
 if __name__ == '__main__':
-    unit = 1
-    print unit
-    unit = 'daily'
-    print unit
+    import sys
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtGui.QApplication.instance().exec_()

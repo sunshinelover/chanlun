@@ -47,6 +47,8 @@ exchangeMap[EXCHANGE_CZCE] = 'CZCE'
 exchangeMap[EXCHANGE_DCE] = 'DCE'
 exchangeMap[EXCHANGE_SSE] = 'SSE'
 exchangeMap[EXCHANGE_UNKNOWN] = ''
+EXCHANGE_INE = 'INE'    #上海能源交易中心
+exchangeMap[EXCHANGE_INE] = 'INE'
 exchangeMapReverse = {v:k for k,v in exchangeMap.items()}
 
 # 持仓类型映射
