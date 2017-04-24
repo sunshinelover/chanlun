@@ -12,6 +12,7 @@ import pymongo
 from pymongo.errors import *
 from datetime import datetime, timedelta
 from ctaHistoryData import HistoryDataEngine
+import time
 import types
 import pandas as pd
 ########################################################################
@@ -72,10 +73,18 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.codeEdit.setPlaceholderText(u'在此输入期货代码')
         self.codeEdit.setMaximumWidth(200)
         self.data = pd.DataFrame() #画图所需数据, 重要
-
+        self.fenX = [] #分笔分段所需X轴坐标
+        self.fenY = [] #分笔分段所需Y轴坐标
         # 金融图
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
 
+        # MongoDB数据库相关
+        self.__mongoConnected = False
+        self.__mongoConnection = None
+        self.__mongoTickDB = None
+
+        # 调用函数
+        self.__connectMongo()
 
         # 按钮
         penButton = QtGui.QPushButton(u'分笔')
@@ -87,7 +96,6 @@ class ChanlunEngineManager(QtGui.QWidget):
         segmentButton.clicked.connect(self.segment)
         shopButton.clicked.connect(self.shop)
         restoreButton.clicked.connect(self.restore)
-
 
         # Chanlun组件的日志监控
         self.chanlunLogMonitor = QtGui.QTextEdit()
@@ -160,6 +168,19 @@ class ChanlunEngineManager(QtGui.QWidget):
     def downloadData(self, symbol, unit):
         listBar = [] #K线数据
         num = 0
+        #从数据库获取前两天分钟数据
+        if unit == 1:
+            cx = self.getDbData(symbol, unit)
+            if cx:
+                for data in cx:
+                    barOpen = data['open']
+                    barClose = data['close']
+                    barLow = data['low']
+                    barHigh = data['high']
+                    barTime = data['time']
+                    listBar.append((num, barTime, barOpen, barClose, barLow, barHigh))
+                    num += 1
+
         #从通联客户端获取K线数据
         historyDataEngine = HistoryDataEngine()
         # unit为int型获取分钟数据，为String类型获取日周月K线数据
@@ -197,7 +218,25 @@ class ChanlunEngineManager(QtGui.QWidget):
         df.index = df['time'].tolist()
         df = df.drop('time', 1)
         return df
-
+    #-----------------------------------------------------------------------
+    #从数据库获取前两天的分钟数据
+    def getDbData(self, symbol, unit):
+        #周六周日不交易，无分钟数据
+        weekday = datetime.now().weekday()  #weekday() 返回的是0-6是星期一到星期日
+        if weekday == 6:
+            aDay = timedelta(days=3)
+        elif weekday == 0 or weekday == 1:
+            aDay = timedelta(days=4)
+        else:
+            aDay = timedelta(days=2)
+        startDate = (datetime.now() - aDay).strftime('%Y%m%d')
+        print startDate
+        if self.__mongoConnected:
+            collection = self.__mongoMinDB[symbol]
+            cx = collection.find({'date': {'$gte': startDate}})
+            return cx
+        else:
+            return None
     #----------------------------------------------------------------------------------
     #"""合约变化"""
     def updateSymbol(self):
@@ -395,11 +434,6 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.tickLoaded = True
         self.penLoaded = False
     # ----------------------------------------------------------------------
-    def segment(self):
-        """加载分段"""
-        self.chanlunEngine.writeChanlunLog(u'分段加载成功')
-        self.segmentoLaded = True
-    # ----------------------------------------------------------------------
     def shop(self):
         """加载买卖点"""
         self.chanlunEngine.writeChanlunLog(u'买卖点加载成功')
@@ -433,29 +467,131 @@ class ChanlunEngineManager(QtGui.QWidget):
 
             #使用合并K线的数据重新画K线图
             self.plotAfterFenXing(after_fenxing)
-            print after_fenxing
-
             # 找出顶和底
             fenxing_data, fenxing_type = self.findTopAndLow(after_fenxing)
 
-            print fenxing_data
-
-            self.chanlunEngine.writeChanlunLog(u'分笔加载成功')
             arrayFenxingdata = np.array(fenxing_data)
             arrayTypedata = np.array(fenxing_type)
-            fenbiX = [m[0] for m in arrayFenxingdata]
-            print 'x', fenbiX
-            fenbiY1 = [m[4] for m in arrayFenxingdata]   #顶分型标志最高价
-            fenbiY2 = [m[3] for m in arrayFenxingdata]   #底分型标志最低价
-            fenbiY = []
-            for i in xrange(len(fenbiX)):
+            self.fenX = []
+            self.fenY = []
+            self.fenX = [m[0] for m in arrayFenxingdata]
+            print 'x', self.fenX
+            fenbiY1 = [m[4] for m in arrayFenxingdata]  # 顶分型标志最高价
+            fenbiY2 = [m[3] for m in arrayFenxingdata]  # 底分型标志最低价
+            for i in xrange(len(self.fenX)):
                 if arrayTypedata[i] == 1:
-                    fenbiY.append(fenbiY1[i])
+                    self.fenY.append(fenbiY1[i])
                 else:
-                    fenbiY.append(fenbiY2[i])
+                    self.fenY.append(fenbiY2[i])
             if not self.penLoaded:
-                self.fenbi(fenbiX, fenbiY)
+                self.fenbi(self.fenX, self.fenY)
+            print self.fenY
+            self.chanlunEngine.writeChanlunLog(u'分笔加载成功')
             self.penLoaded = True
+    # ----------------------------------------------------------------------
+    def segment(self):
+        if not self.penLoaded:
+            self.pen()                #先分笔才能分段
+        segmentX = []    #分段点X轴值
+        segmentY = []    #分段点Y轴值
+        temp_type = 0    #标志线段方向，向上为1，向下为-1, 未判断前三笔是否重合为0
+        i = 0
+        while i < len(self.fenX) - 4:
+            if temp_type == 0:
+                if self.fenY[i] > self.fenY[i+1] and self.fenY[i] > self.fenY[i+3]:
+                    temp_type = -1           #向下线段，三笔重合
+                    segmentX.append(self.fenX[i])
+                    segmentY.append(self.fenY[i])
+                elif self.fenY[i] < self.fenY[i+1] and self.fenY[i] < self.fenY[i+3]:
+                    temp_type = 1            #向上线段，三笔重合
+                    segmentX.append(self.fenX[i])
+                    segmentY.append(self.fenY[i])
+                else:
+                    temp_type = 0
+                    i += 1
+                    continue
+            if temp_type == 1:  #向上线段
+                j = i+1
+                high = []  # 记录顶
+                low = []  # 记录低
+                while j < len(self.fenX) - 1:     #记录顶底
+                    high.append(self.fenY[j])
+                    low.append(self.fenY[j+1])
+                    j += 2
+                if self.fenY[i+4] < self.fenY[i+1]:    #向上线段被向下笔破坏
+                    j = 0
+                    while j < len(high)-2:
+                        # 顶底出现顶分型，向上线段结束
+                        if high[j+1] > high[j] and high[j+1] > high[j+2]:
+                            num = i + 2 * j + 3   #线段结束点位置
+                            print num
+                            segmentX.append(self.fenX[num])
+                            segmentY.append(self.fenY[num])
+                            i = num
+                            temp_type = -1   #向上线段一定由向下线段结束
+                            break
+                        j += 1
+                    if j == len(high)-2:
+                        break
+                else:   #向上线段未被向下笔破坏
+                    j = 1
+                    while j < len(high)-2:
+                        # 顶底出现底分型，向上线段结束
+                        if low[j + 1] < low[j] and low[j + 1] < low[j + 2]:
+                            num = i + 2 * j + 1  # 线段结束点位置
+                            print num
+                            segmentX.append(self.fenX[num])
+                            segmentY.append(self.fenY[num])
+                            i = num
+                            temp_type = -1  # 向上线段一定由向下线段结束
+                            break
+                        j += 1
+                    if j == len(high)-2:
+                        break
+            elif temp_type == -1:  # 向下线段
+                j = i + 1
+                high = []  # 记录顶
+                low = []  # 记录低
+                while j < len(self.fenX) - 1:  # 记录顶底
+                    high.append(self.fenY[j + 1])
+                    low.append(self.fenY[j])
+                    j += 2
+                if self.fenY[i + 4] > self.fenY[i + 1]:  # 向下线段被向上笔破坏
+                    j = 0
+                    while j < len(high) - 2:
+                        # 顶底出现底分型，向下线段结束
+                        if low[j + 1] < low[j] and low[j + 1] < low[j + 2]:
+                            num = i + 2 * j + 3  # 线段结束点位置
+                            print num
+                            segmentX.append(self.fenX[num])
+                            segmentY.append(self.fenY[num])
+                            i = num
+                            temp_type = 1  # 向下线段一定由向上线段结束
+                            break
+                        j += 1
+                    if j == len(high) - 2:
+                        break
+                else:  # 向下线段未被向上笔破坏
+                    j = 1
+                    while j < len(high) - 2:
+                    # 顶底出现顶分型，向下线段结束
+                        if high[j + 1] > high[j] and high[j + 1] > high[j + 2]:
+                            num = i + 2 * j + 1  # 线段结束点位置
+                            print num
+                            segmentX.append(self.fenX[num])
+                            segmentY.append(self.fenY[num])
+                            i = num
+                            temp_type = 1  # 向下线段一定由向上线段结束
+                            break
+                        j += 1
+                    if j == len(high) - 2:
+                        break
+        print segmentX
+        print segmentY
+        if not self.segmentLoaded:
+            self.fenduan(segmentX, segmentY)
+        self.chanlunEngine.writeChanlunLog(u'分段加载成功')
+        self.segmentLoaded = True
     # ----------------------------------------------------------------------
     def updateChanlunLog(self, event):
         """更新缠论相关日志"""
@@ -468,12 +604,10 @@ class ChanlunEngineManager(QtGui.QWidget):
             print 0
     # ----------------------------------------------------------------------
     def fenbi(self, fenbix, fenbiy):
-        # self.PriceW.pw2.plot(x=fenbix, y=fenbiy, symbol='o')
-        p = QtGui.QPainter(QtGui.QPicture.picture)
-        p.setPen(pg.mkPen(color=(200, 200, 255), style=QtCore.Qt.DotLine))  # 0.4 means w*2
-        for i in xrange(len(fenbix)-1):
-            p.drawLine(QtCore.QPointF(fenbix[i], fenbiy[i]), QtCore.QPointF(fenbix[i+1], fenbiy[i+1]))
-        self.chanlunEngine.writeChanlunLog(u'进行分笔')
+        self.PriceW.pw2.plot(x=fenbix, y=fenbiy, pen='y')
+
+    def fenduan(self, fenduanx, fenduany):
+        self.PriceW.pw2.plot(x=fenduanx, y=fenduany, symbol='o', pen='b')
     
     # ----------------------------------------------------------------------
     # 判断包含关系，仿照聚框，合并K线数据
@@ -560,9 +694,11 @@ class ChanlunEngineManager(QtGui.QWidget):
                         temp_high = after_fenxing.high[i]
                         temp_num = i
                         temp_type = 1
-                        i += 4
+                        i += 1
                 elif temp_type == 2:  # 如果上一个分型为底分型，则记录上一个分型，用当前分型与后面的分型比较，选取同向更极端的分型
                     if temp_low >= after_fenxing.high[i]:  # 如果上一个底分型的底比当前顶分型的顶高，则跳过当前顶分型。
+                        i += 1
+                    elif i < temp_num + 4:  # 顶和底至少5k线
                         i += 1
                     else:
                         fenxing_type.append(-1)
@@ -570,12 +706,12 @@ class ChanlunEngineManager(QtGui.QWidget):
                         temp_high = after_fenxing.high[i]
                         temp_num = i
                         temp_type = 1
-                        i += 4
+                        i += 1
                 else:
                     temp_high = after_fenxing.high[i]
                     temp_num = i
                     temp_type = 1
-                    i += 4
+                    i += 1
 
             elif case2:
                 if temp_type == 2:  # 如果上一个分型为底分型，则进行比较，选取低点更低的分型
@@ -585,9 +721,11 @@ class ChanlunEngineManager(QtGui.QWidget):
                         temp_low = after_fenxing.low[i]
                         temp_num = i
                         temp_type = 2
-                        i += 4
+                        i += 1
                 elif temp_type == 1:  # 如果上一个分型为顶分型，则记录上一个分型，用当前分型与后面的分型比较，选取同向更极端的分型
                     if temp_high <= after_fenxing.low[i]:  # 如果上一个顶分型的底比当前底分型的底低，则跳过当前底分型。
+                        i += 1
+                    elif i < temp_num + 4:  # 顶和底至少5k线
                         i += 1
                     else:
                         fenxing_type.append(1)
@@ -595,12 +733,12 @@ class ChanlunEngineManager(QtGui.QWidget):
                         temp_low = after_fenxing.low[i]
                         temp_num = i
                         temp_type = 2
-                        i += 4
+                        i += 1
                 else:
                     temp_low = after_fenxing.low[i]
                     temp_num = i
                     temp_type = 2
-                    i += 4
+                    i += 1
             else:
                 i += 1
 
@@ -613,8 +751,17 @@ class ChanlunEngineManager(QtGui.QWidget):
                 fenxing_type.append(1)
                 fenxing_data = pd.concat([fenxing_data, after_fenxing[temp_num:temp_num + 1]], axis=0)
 
-        print fenxing_type
         return fenxing_data, fenxing_type
+
+    # ----------------------------------------------------------------------
+    # 连接MongoDB数据库
+    def __connectMongo(self):
+        try:
+            self.__mongoConnection = pymongo.MongoClient("localhost", 27017)
+            self.__mongoConnected = True
+            self.__mongoMinDB = self.__mongoConnection['VnTrader_1Min_Db']
+        except ConnectionFailure:
+            pass
     # ----------------------------------------------------------------------
     def registerEvent(self):
         """注册事件监听"""
@@ -626,6 +773,7 @@ class PriceWidget(QtGui.QWidget):
     """用于显示价格走势图"""
     signal = QtCore.pyqtSignal(type(Event()))
     symbol = ''
+
     class CandlestickItem(pg.GraphicsObject):
         def __init__(self, data):
             pg.GraphicsObject.__init__(self)
@@ -699,9 +847,6 @@ class PriceWidget(QtGui.QWidget):
         self.initCompleted = False
         # 初始化时读取的历史数据的起始日期(可以选择外部设置)
         self.startDate = None
-
-        self.vLine = pg.InfiniteLine(angle=90, movable=False)
-        self.hLine = pg.InfiniteLine(angle=0, movable=False)
 
         self.__eventEngine = eventEngine
         self.__mainEngine = chanlunEngine
@@ -1020,7 +1165,6 @@ class PriceWidget(QtGui.QWidget):
                 self.barClose = tick.lastPrice
                 self.barTime = self.ticktime
 
-
     #----------------------------------------------------------------------
     def onBar(self, n, t, o, c, l, h):
         self.listBar.append((n, t, o, c, l, h))
@@ -1090,8 +1234,6 @@ class PriceWidget(QtGui.QWidget):
         #     return cx
         # else:
         #     return None
-
-
 
     #----------------------------------------------------------------------
     def registerEvent(self):
