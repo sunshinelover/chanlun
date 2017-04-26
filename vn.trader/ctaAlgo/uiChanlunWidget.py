@@ -6,6 +6,7 @@
 from vtGateway import VtSubscribeReq
 from uiBasicWidget import QtGui, QtCore, BasicCell,BasicMonitor,TradingWidget
 from eventEngine import *
+from ctaBase import *
 import pyqtgraph as pg
 import numpy as np
 import pymongo
@@ -168,8 +169,15 @@ class ChanlunEngineManager(QtGui.QWidget):
     def downloadData(self, symbol, unit):
         listBar = [] #K线数据
         num = 0
-        #从数据库获取前两天分钟数据
-        if unit == 1:
+
+        #从通联客户端获取K线数据
+        historyDataEngine = HistoryDataEngine()
+
+        # unit为int型获取分钟数据，为String类型获取日周月K线数据
+        if type(unit) is types.IntType:
+            #从通联数据端获取当日分钟数据并存入数据库
+            historyDataEngine.downloadFuturesIntradayBar(symbol, unit)
+            # 从数据库获取前几天的分钟数据
             cx = self.getDbData(symbol, unit)
             if cx:
                 for data in cx:
@@ -177,41 +185,29 @@ class ChanlunEngineManager(QtGui.QWidget):
                     barClose = data['close']
                     barLow = data['low']
                     barHigh = data['high']
-                    barTime = data['time']
+                    barTime = data['datetime']
                     listBar.append((num, barTime, barOpen, barClose, barLow, barHigh))
                     num += 1
 
-        #从通联客户端获取K线数据
-        historyDataEngine = HistoryDataEngine()
-        # unit为int型获取分钟数据，为String类型获取日周月K线数据
-        if type(unit) is types.IntType:
-            data = historyDataEngine.downloadFuturesIntradayBar(symbol, unit)
         elif type(unit) is types.StringType:
             data = historyDataEngine.downloadFuturesBar(symbol, unit)
-        else:
-            print "参数格式错误"
-            return
-
-        if data:
-            for d in data:
-                barOpen = d.get('openPrice', 0)
-                barClose = d.get('closePrice', 0)
-                if type(unit) is types.StringType:
+            if data:
+                for d in data:
+                    barOpen = d.get('openPrice', 0)
+                    barClose = d.get('closePrice', 0)
                     barLow = d.get('lowestPrice', 0)
                     barHigh = d.get('highestPrice', 0)
                     if unit == "daily":
                         barTime = d.get('tradeDate', '').replace('-', '')
                     else:
                         barTime = d.get('endDate', '').replace('-', '')
-                else:
-                    barLow = d.get('lowPrice', 0)
-                    barHigh = d.get('highPrice', 0)
-                    barTime = d.get('barTime', '')
-                listBar.append((num, barTime, barOpen, barClose, barLow, barHigh))
-                num += 1
-
-        if unit == "monthly":
-            listBar.reverse()
+                    listBar.append((num, barTime, barOpen, barClose, barLow, barHigh))
+                    num += 1
+                if unit == "monthly" or unit == "weekly":
+                    listBar.reverse()
+        else:
+            print "参数格式错误"
+            return
 
         #将List数据转换成dataFormat类型，方便处理
         df = pd.DataFrame(listBar, columns=['num', 'time', 'open', 'close', 'low', 'high'])
@@ -222,17 +218,46 @@ class ChanlunEngineManager(QtGui.QWidget):
     #从数据库获取前两天的分钟数据
     def getDbData(self, symbol, unit):
         #周六周日不交易，无分钟数据
-        weekday = datetime.now().weekday()  #weekday() 返回的是0-6是星期一到星期日
-        if weekday == 6:
-            aDay = timedelta(days=3)
-        elif weekday == 0 or weekday == 1:
-            aDay = timedelta(days=4)
+        # 给数据库命名
+        dbname = ''
+        if unit == 1:
+            dbname = MINUTE_DB_NAME
+            days = 1
+        elif unit == 5:
+            dbname = MINUTE5_DB_NAME
+            days = 2
+        elif unit == 15:
+            dbname = MINUTE15_DB_NAME
+            days = 2
+        elif unit == 30:
+            dbname = MINUTE30_DB_NAME
+            days = 7
+        elif unit == 60:
+            dbname = MINUTE60_DB_NAME
+            days = 7
+
+        weekday = datetime.now().weekday()  # weekday() 返回的是0-6是星期一到星期日
+        if days == 2:
+            if weekday == 6:
+                aDay = timedelta(days=3)
+            elif weekday == 0 or weekday == 1:
+                aDay = timedelta(days=4)
+            else:
+                aDay = timedelta(days=2)
+        elif days ==1:
+            if weekday == 6:
+                aDay = timedelta(days=2)
+            elif weekday == 0 or weekday == 1:
+                aDay = timedelta(days=3)
+            else:
+                aDay = timedelta(days=1)
         else:
-            aDay = timedelta(days=2)
+            aDay = timedelta(days=7)
+
         startDate = (datetime.now() - aDay).strftime('%Y%m%d')
         print startDate
         if self.__mongoConnected:
-            collection = self.__mongoMinDB[symbol]
+            collection = self.__mongoConnection[dbname][symbol]
             cx = collection.find({'date': {'$gte': startDate}})
             return cx
         else:
@@ -258,9 +283,6 @@ class ChanlunEngineManager(QtGui.QWidget):
 
         self.penLoaded = False
         self.segmentLoaded = False
-
-        # 从数据库获取当日分钟数据并画图
-        # self.PriceW.plotMin(instrumentid)
 
         # # 订阅合约[仿照ctaEngine.py写的]
         # # 先取消订阅之前的合约，再订阅最新输入的合约
@@ -300,6 +322,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW.plotHistorticData()
 
         self.penLoaded = False
+        self.segmentLoaded = False
 
     # ----------------------------------------------------------------------
     def fiveM(self):
@@ -318,6 +341,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW.plotHistorticData()
 
         self.penLoaded = False
+        self.segmentLoaded = False
 
 
     # ----------------------------------------------------------------------
@@ -337,6 +361,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW.plotHistorticData()
 
         self.penLoaded = False
+        self.segmentLoaded = False
 
     # ----------------------------------------------------------------------
     def thirtyM(self):
@@ -354,6 +379,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW.plotHistorticData()
 
         self.penLoaded = False
+        self.segmentLoaded = False
 
 
     # ----------------------------------------------------------------------
@@ -372,6 +398,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW.plotHistorticData()
 
         self.penLoaded = False
+        self.segmentLoaded = False
 
 
     # ----------------------------------------------------------------------
@@ -390,6 +417,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW.plotHistorticData()
 
         self.penLoaded = False
+        self.segmentLoaded = False
         
     # ----------------------------------------------------------------------
     def weekly(self):
@@ -407,6 +435,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW.plotHistorticData()
         
         self.penLoaded = False
+        self.segmentLoaded = False
     
     def monthly(self):
         """打开月K线图"""
@@ -423,6 +452,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW.plotHistorticData()
         
         self.penLoaded = False
+        self.segmentLoaded = False
     # ----------------------------------------------------------------------
     def openTick(self):
         """切换成tick图"""
@@ -433,6 +463,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.vbox1.addWidget(self.PriceW)
         self.tickLoaded = True
         self.penLoaded = False
+        self.segmentLoaded = False
     # ----------------------------------------------------------------------
     def shop(self):
         """加载买卖点"""
@@ -484,8 +515,12 @@ class ChanlunEngineManager(QtGui.QWidget):
                 else:
                     self.fenY.append(fenbiY2[i])
             if not self.penLoaded:
+                self.fenX.append(self.fenX[-1])
+                self.fenY.append(self.fenY[-1])
+                print self.fenX
+                print self.fenY
                 self.fenbi(self.fenX, self.fenY)
-            print self.fenY
+
             self.chanlunEngine.writeChanlunLog(u'分笔加载成功')
             self.penLoaded = True
     # ----------------------------------------------------------------------
@@ -589,6 +624,8 @@ class ChanlunEngineManager(QtGui.QWidget):
         print segmentX
         print segmentY
         if not self.segmentLoaded:
+            segmentX.append(segmentX[-1])
+            segmentY.append(segmentY[-1])
             self.fenduan(segmentX, segmentY)
         self.chanlunEngine.writeChanlunLog(u'分段加载成功')
         self.segmentLoaded = True
@@ -604,10 +641,10 @@ class ChanlunEngineManager(QtGui.QWidget):
             print 0
     # ----------------------------------------------------------------------
     def fenbi(self, fenbix, fenbiy):
-        self.PriceW.pw2.plot(x=fenbix, y=fenbiy, pen='y')
+        self.PriceW.pw2.plotItem.plot(x=fenbix, y=fenbiy, pen=QtGui.QPen(QtGui.QColor(255, 236, 139)))
 
     def fenduan(self, fenduanx, fenduany):
-        self.PriceW.pw2.plot(x=fenduanx, y=fenduany, symbol='o', pen='b')
+        self.PriceW.pw2.plot(x=fenduanx, y=fenduany, symbol='o', pen=QtGui.QPen(QtGui.QColor(131, 111, 255)))
     
     # ----------------------------------------------------------------------
     # 判断包含关系，仿照聚框，合并K线数据
@@ -742,14 +779,14 @@ class ChanlunEngineManager(QtGui.QWidget):
             else:
                 i += 1
 
-        if fenxing_type:
-            if fenxing_type[-1] == 1 and temp_type == 2:
-                fenxing_type.append(-1)
-                fenxing_data = pd.concat([fenxing_data, after_fenxing[temp_num:temp_num + 1]], axis=0)
-
-            if fenxing_type[-1] == -1 and temp_type == 1:
-                fenxing_type.append(1)
-                fenxing_data = pd.concat([fenxing_data, after_fenxing[temp_num:temp_num + 1]], axis=0)
+        # if fenxing_type:
+        #     if fenxing_type[-1] == 1 and temp_type == 2:
+        #         fenxing_type.append(-1)
+        #         fenxing_data = pd.concat([fenxing_data, after_fenxing[temp_num:temp_num + 1]], axis=0)
+        #
+        #     if fenxing_type[-1] == -1 and temp_type == 1:
+        #         fenxing_type.append(1)
+        #         fenxing_data = pd.concat([fenxing_data, after_fenxing[temp_num:temp_num + 1]], axis=0)
 
         return fenxing_data, fenxing_type
 
@@ -759,7 +796,6 @@ class ChanlunEngineManager(QtGui.QWidget):
         try:
             self.__mongoConnection = pymongo.MongoClient("localhost", 27017)
             self.__mongoConnected = True
-            self.__mongoMinDB = self.__mongoConnection['VnTrader_1Min_Db']
         except ConnectionFailure:
             pass
     # ----------------------------------------------------------------------

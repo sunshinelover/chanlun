@@ -218,6 +218,7 @@ class HistoryDataEngine(object):
         if data:
             print "返回 %d 条数据记录" % len(data)
             today = datetime.now().strftime('%Y%m%d')
+            yesterday = (datetime.now() - timedelta(1)).strftime('%Y%m%d')
 
             #给数据库命名
             dbname = ''
@@ -249,8 +250,11 @@ class HistoryDataEngine(object):
                     bar.high = d.get('highPrice', 0)
                     bar.low = d.get('lowPrice', 0)
                     bar.close = d.get('closePrice', 0)
-                    bar.date = today
                     bar.time = d.get('barTime', '')
+                    if bar.time[0] == '2':
+                        bar.date = yesterday
+                    else:
+                        bar.date = today
                     bar.datetime = datetime.strptime(bar.date + ' ' + bar.time, '%Y%m%d %H:%M')
                     bar.volume = d.get('totalValue', 0)
                     bar.openInterest = d.get('openInterest', 0)
@@ -261,7 +265,6 @@ class HistoryDataEngine(object):
                 self.dbClient[dbname][symbol].update_one(flt, {'$set': bar.__dict__}, upsert=True)
 
             print u'下载完成'
-            return data
         else:
             print u'找不到合约%s' % symbol
 
