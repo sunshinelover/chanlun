@@ -241,28 +241,31 @@ class HistoryDataEngine(object):
                                                                unique=True)
 
             for d in data:
-                bar = CtaBarData()
-                bar.vtSymbol = symbol
-                bar.symbol = symbol
-                try:
-                    bar.exchange = ''
-                    bar.open = d.get('openPrice', 0)
-                    bar.high = d.get('highPrice', 0)
-                    bar.low = d.get('lowPrice', 0)
-                    bar.close = d.get('closePrice', 0)
-                    bar.time = d.get('barTime', '')
-                    if bar.time[0] == '2':
-                        bar.date = yesterday
-                    else:
-                        bar.date = today
-                    bar.datetime = datetime.strptime(bar.date + ' ' + bar.time, '%Y%m%d %H:%M')
-                    bar.volume = d.get('totalValue', 0)
-                    bar.openInterest = d.get('openInterest', 0)
-                except KeyError:
-                    print d
+                if d.get('openPrice', 0) == d.get('highPrice', 0) == d.get('lowPrice', 0) == d.get('closePrice', 0):
+                    continue
+                else:
+                    bar = CtaBarData()
+                    bar.vtSymbol = symbol
+                    bar.symbol = symbol
+                    try:
+                        bar.exchange = ''
+                        bar.open = d.get('openPrice', 0)
+                        bar.high = d.get('highPrice', 0)
+                        bar.low = d.get('lowPrice', 0)
+                        bar.close = d.get('closePrice', 0)
+                        bar.time = d.get('barTime', '')
+                        if bar.time[0] == '2':
+                            bar.date = yesterday
+                        else:
+                            bar.date = today
+                        bar.datetime = datetime.strptime(bar.date + ' ' + bar.time, '%Y%m%d %H:%M')
+                        bar.volume = d.get('totalValue', 0)
+                        bar.openInterest = d.get('openInterest', 0)
+                    except KeyError:
+                        print d
 
-                flt = {'datetime': bar.datetime}
-                self.dbClient[dbname][symbol].update_one(flt, {'$set': bar.__dict__}, upsert=True)
+                    flt = {'datetime': bar.datetime}
+                    self.dbClient[dbname][symbol].update_one(flt, {'$set': bar.__dict__}, upsert=True)
 
             print u'下载完成'
         else:
