@@ -55,7 +55,6 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.penLoaded = False
         self.segmentLoaded = False
         self.tickLoaded = False
-        self.priceLoaded = False
         self.instrumentid = ''
 
         self.initUi()
@@ -79,6 +78,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.fenY = [] #分笔分段所需Y轴坐标
         # 金融图
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
+        self.TickW = TickWidget(self.eventEngine, self.chanlunEngine)
 
         # MongoDB数据库相关
         self.__mongoConnected = False
@@ -177,7 +177,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         # unit为int型获取分钟数据，为String类型获取日周月K线数据
         if type(unit) is types.IntType:
             #从通联数据端获取当日分钟数据并存入数据库
-            # historyDataEngine.downloadFuturesIntradayBar(symbol, unit)
+            historyDataEngine.downloadFuturesIntradayBar(symbol, unit)
             # 从数据库获取前几天的分钟数据
             cx = self.getDbData(symbol, unit)
             if cx:
@@ -221,15 +221,13 @@ class ChanlunEngineManager(QtGui.QWidget):
         #周六周日不交易，无分钟数据
         # 给数据库命名
         dbname = ''
+        days = 2
         if unit == 1:
             dbname = MINUTE_DB_NAME
-            days = 2
         elif unit == 5:
             dbname = MINUTE5_DB_NAME
-            days = 2
         elif unit == 15:
             dbname = MINUTE15_DB_NAME
-            days = 2
         elif unit == 30:
             dbname = MINUTE30_DB_NAME
             days = 7
@@ -245,13 +243,6 @@ class ChanlunEngineManager(QtGui.QWidget):
                 aDay = timedelta(days=4)
             else:
                 aDay = timedelta(days=2)
-        elif days ==1:
-            if weekday == 6:
-                aDay = timedelta(days=2)
-            elif weekday == 0 or weekday == 1:
-                aDay = timedelta(days=3)
-            else:
-                aDay = timedelta(days=1)
         else:
             aDay = timedelta(days=7)
 
@@ -279,48 +270,44 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW.deleteLater()
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
-        #画K线图
+        # 画K线图
         self.PriceW.plotHistorticData()
 
         self.penLoaded = False
         self.segmentLoaded = False
-        self.priceLoaded = True
+        self.tickLoaded = False
 
-        # 订阅合约[仿照ctaEngine.py写的]
-        # 先取消订阅之前的合约，再订阅最新输入的合约
-        contract = self.mainEngine.getContract(self.instrumentid)
-        if contract:
-            req = VtSubscribeReq()
-            req.symbol = contract.symbol
-            self.mainEngine.unsubscribe(req, contract.gatewayName)
-
-            contract = self.mainEngine.getContract(instrumentid)
-            if contract:
-                req = VtSubscribeReq()
-                req.symbol = contract.symbol
-                self.mainEngine.subscribe(req, contract.gatewayName)
-            else:
-                self.chanlunEngine.writeChanlunLog(u'交易合约%s无法找到' % (instrumentid))
-
-        # 重新注册事件监听
-        self.eventEngine.unregister(EVENT_TICK + self.instrumentid, self.signal.emit)
-        self.eventEngine.register(EVENT_TICK + instrumentid, self.signal.emit)
+        # # 订阅合约[仿照ctaEngine.py写的]
+        # # 先取消订阅之前的合约，再订阅最新输入的合约
+        # contract = self.mainEngine.getContract(self.instrumentid)
+        # if contract:
+        #     req = VtSubscribeReq()
+        #     req.symbol = contract.symbol
+        #     self.mainEngine.unsubscribe(req, contract.gatewayName)
+        #
+        #     contract = self.mainEngine.getContract(instrumentid)
+        #     if contract:
+        #         req = VtSubscribeReq()
+        #         req.symbol = contract.symbol
+        #         self.mainEngine.subscribe(req, contract.gatewayName)
+        #     else:
+        #         self.chanlunEngine.writeChanlunLog(u'交易合约%s无法找到' % (instrumentid))
+        #
+        # # 重新注册事件监听
+        # self.eventEngine.unregister(EVENT_TICK + self.instrumentid, self.signal.emit)
+        # self.eventEngine.register(EVENT_TICK + instrumentid, self.signal.emit)
 
         # 更新目前的合约
         self.instrumentid = instrumentid
 
     def oneM(self):
         "打开1分钟K线图"
-        if self.tickLoaded:
-            self.vbox1.removeWidget(self.TickW)
-            self.TickW.deleteLater()
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 1分钟K线图' % (self.instrumentid))
         # 从通联数据客户端获取数据
         self.data = self.downloadData(self.instrumentid, 1)
 
-        if self.priceLoaded:
-            self.vbox1.removeWidget(self.PriceW)
-            self.PriceW.deleteLater()
+        self.vbox1.removeWidget(self.PriceW)
+        self.PriceW.deleteLater()
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
@@ -463,16 +450,27 @@ class ChanlunEngineManager(QtGui.QWidget):
     def openTick(self):
         """切换成tick图"""
         self.chanlunEngine.writeChanlunLog(u'打开tick图')
+
+        # 注册事件监听
+        self.eventEngine.register(EVENT_TICK + self.instrumentid, self.signal.emit)
+
+        # 订阅合约[仿照ctaEngine.py写的]
+        contract = self.mainEngine.getContract(self.instrumentid)
+        if contract:
+            req = VtSubscribeReq()
+            req.symbol = contract.symbol
+            self.mainEngine.subscribe(req, contract.gatewayName)
+        else:
+            self.chanlunEngine.writeChanlunLog(u'交易合约%s无法找到' % (self.instrumentid))
+
         self.vbox1.removeWidget(self.PriceW)
         self.PriceW.deleteLater()
-        # self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data, self)
-        # self.vbox1.addWidget(self.PriceW)
-        self.TickW = TickWidget(self.eventEngine, self.chanlunEngine, self)
+        self.TickW = TickWidget(self.eventEngine, self.chanlunEngine)
         self.vbox1.addWidget(self.TickW)
+
         self.tickLoaded = True
         self.penLoaded = False
         self.segmentLoaded = False
-        self.priceLoaded = False
     # ----------------------------------------------------------------------
     def shop(self):
         """加载买卖点"""
@@ -640,87 +638,70 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.chanlunEngine.writeChanlunLog(u'分段加载成功')
         self.segmentLoaded = True
     # ----------------------------------------------------------------------
+    def updateChanlunLog(self, event):
+        """更新缠论相关日志"""
+        log = event.dict_['data']
+        # print type(log)
+        if(log.logTime):
+            content = '\t'.join([log.logTime, log.logContent])
+            self.chanlunLogMonitor.append(content)
+        else:
+            print 0
+    #-----------------------------------------------------------------------
     def zhongShu(self):
         if not self.penLoaded:
-            self.pen()                #先分笔才能画走势中枢
-        temp_type = 0    #标志走势类型，向上为1，向下为2, 盘整为3, 未判断前三笔是否重合为0
+            self.pen()  # 先分笔才能画走势中枢
+        temp_type = 0  # 标志走势类型，向上为1，向下为2, 盘整为3, 未判断前三笔是否重合为0
         i = 0
-        zhongshuType = []   # 记录所有的中枢向上或者向下，向上为1，向下为2
+        zhongshuType = []  # 记录所有的中枢向上或者向下，向上为1，向下为2
         while i < len(self.fenX) - 5:
             zhongshuX = []  # 记录每一个走势的中枢区域内点的横坐标
             zhongshuY = []  # 记录每一个走势的中枢区域内点的纵坐标
-            if(self.fenY[i] > self.fenY[i + 1] and self.fenY[i] > self.fenY[i + 3] and self.fenY[i + 1] < self.fenY[
-                    i + 4]):
+            if (self.fenY[i] > self.fenY[i + 1] and self.fenY[i] > self.fenY[i + 3] and self.fenY[i + 1] < self.fenY[i + 4]):
                 while (self.fenY[i] > self.fenY[i + 3] and self.fenY[i + 1] < self.fenY[i + 4]):
                     temp_type = 2  # 向下线段，三笔重合
-                    zhongshuX.append(self.fenX[i + 1])
-                    zhongshuX.append(self.fenX[i + 2])
-                    zhongshuX.append(self.fenX[i + 3])
-                    zhongshuX.append(self.fenX[i + 4])
-                    zhongshuY.append(self.fenY[i + 1])
-                    zhongshuY.append(self.fenY[i + 2])
-                    zhongshuY.append(self.fenY[i + 3])
-                    zhongshuY.append(self.fenY[i + 4])
+                    for j in xrange(4):
+                        zhongshuX.append(self.fenX[i + j + 1])
+                        zhongshuY.append(self.fenY[i + j + 1])
                     i = i + 2
-            elif (self.fenY[i] < self.fenY[i + 1] and self.fenY[i] < self.fenY[i + 3] and self.fenY[i + 1] > self.fenY[
-                    i + 4]):
-                while(self.fenY[i] < self.fenY[i + 3] and self.fenY[i + 1] > self.fenY[i + 4]):
+            elif (self.fenY[i] < self.fenY[i + 1] and self.fenY[i] < self.fenY[i + 3] and self.fenY[i + 1] > self.fenY[i + 4]):
+                while (self.fenY[i] < self.fenY[i + 3] and self.fenY[i + 1] > self.fenY[i + 4]):
                     temp_type = 1  # 向上线段，三笔重合
-                    zhongshuX.append(self.fenX[i + 1])
-                    zhongshuX.append(self.fenX[i + 2])
-                    zhongshuX.append(self.fenX[i + 3])
-                    zhongshuX.append(self.fenX[i + 4])
-                    zhongshuY.append(self.fenY[i + 1])
-                    zhongshuY.append(self.fenY[i + 2])
-                    zhongshuY.append(self.fenY[i + 3])
-                    zhongshuY.append(self.fenY[i + 4])
+                    for j in xrange(4):
+                        zhongshuX.append(self.fenX[i + j + 1])
+                        zhongshuY.append(self.fenY[i + j + 1])
                     i = i + 2
             else:
                 temp_type = 0
                 i += 1
                 continue
-            j = 1
-            minX = min(zhongshuX)
-            minY = zhongshuY[j]
-            maxX = max(zhongshuX)
-            maxY = zhongshuY[j + 1]
-            while (j < len(zhongshuY)-3):
-                if (maxY > zhongshuY[j + 2]):
-                    maxY = zhongshuY[j + 2]
-                if (minY < zhongshuY[j + 3]):
-                    minY = zhongshuY[j + 3]
-                j = j + 2
 
-            print minX,minY
-            print maxX,maxY
+            #画出当前判断出的中枢
+            minX, maxX = min(zhongshuX), max(zhongshuX)
+            Y1, Y2 = [], []
+            j = 0
+            while j < len(zhongshuY)-1:
+                Y1.append(zhongshuY[j])
+                Y2.append(zhongshuY[j+1])
+                j += 2
+            if temp_type == 2:  # 向下线段
+                minY = max(Y1)
+                maxY = min(Y2)
+            elif temp_type == 1:  # 向上线段
+                minY = max(Y2)
+                maxY = min(Y1)
+
+            if maxY > minY:
+                print minX, minY
+                print maxX, maxY
+                plotX = [minX, minX, maxX, maxX, minX]
+                plotY = [minY, maxY, maxY, minY, minY]
+                self.fenbi(plotX, plotY)
 
             temp_type = 0
             i = i + 3
 
-        zhongX = []
-        zhongY = []
-        zhongX.append(minX)
-        zhongY.append(minY)
-        zhongX.append(minX)
-        zhongY.append(maxY)
-        zhongX.append(maxX)
-        zhongY.append(maxY)
-        zhongX.append(maxX)
-        zhongY.append(minY)
-        zhongX.append(minX)
-        zhongY.append(minY)
-        self.fenbi(zhongX, zhongY)
 
-    # ----------------------------------------------------------------------
-    def updateChanlunLog(self, event):
-        """更新缠论相关日志"""
-        log = event.dict_['data']
-        # print type(log)
-        # if not(type(log)==VtTickData):
-        #     content = '\t'.join([log.logTime, log.logContent])
-        #     self.chanlunLogMonitor.append(content)
-        # else:
-        #     print 0
     # ----------------------------------------------------------------------
     def fenbi(self, fenbix, fenbiy):
         self.PriceW.pw2.plotItem.plot(x=fenbix, y=fenbiy, pen=QtGui.QPen(QtGui.QColor(255, 236, 139)))
@@ -736,7 +717,6 @@ class ChanlunEngineManager(QtGui.QWidget):
         # 保存分型后dataFrame的值
         after_fenxing = pd.DataFrame()
         temp_data = k_data[:1]
-        # print type(k_data),k_data,k_data[:1],temp_data.high[-1]
         zoushi = [3]  # 3-持平 4-向下 5-向上
         for i in xrange(len(k_data)):
             case1_1 = temp_data.high[-1] > k_data.high[i] and temp_data.low[-1] < k_data.low[i]  # 第1根包含第2根
@@ -749,6 +729,7 @@ class ChanlunEngineManager(QtGui.QWidget):
             case4 = temp_data.high[-1] > k_data.high[i] and temp_data.low[-1] > k_data.low[i]  # 向下趋势
             case5 = temp_data.high[-1] < k_data.high[i] and temp_data.low[-1] < k_data.low[i]  # 向上趋势
             if case1_1 or case1_2 or case1_3:
+                print temp_data
                 if zoushi[-1] == 4:
                     temp_data.iloc[0, 4] = k_data.high[i]
                 else:
@@ -791,6 +772,7 @@ class ChanlunEngineManager(QtGui.QWidget):
                 after_fenxing.iloc[i, 1] = after_fenxing.low[i]
                 after_fenxing.iloc[i, 2] = after_fenxing.high[i]
             self.PriceW.onBarAfterFenXing(i, after_fenxing.index[i], after_fenxing.open[i], after_fenxing.close[i], after_fenxing.low[i], after_fenxing.high[i])
+        self.PriceW.plotKlineAfterFenXing()
         print "plotKLine after fenxing"
 
     # ----------------------------------------------------------------------
@@ -1041,6 +1023,7 @@ class PriceWidget(QtGui.QWidget):
         self.initCompleted = True
         for i in xrange(len(self.data)):
             self.onBar(i, self.data.index[i], self.data.open[i], self.data.close[i], self.data.low[i], self.data.high[i])
+        self.plotKline()
         print "plotKLine success"
 
     #----------------------------------------------------------------------
@@ -1116,12 +1099,8 @@ class PriceWidget(QtGui.QWidget):
 
             # 画K线
             self.pw2.removeItem(self.candle)
-            #？？self.pw2.plot(x=self.listTime)
             self.candle = self.CandlestickItem(self.listBar)
             self.pw2.addItem(self.candle)
-            self.plotText()   # 显示开仓信号位置
-
-            # ----------------------------------------------------------------------
 
     #----------------------------------------------------------------------
     def plotText(self):
@@ -1139,150 +1118,150 @@ class PriceWidget(QtGui.QWidget):
                 self.arrow = pg.ArrowItem(pos=(lenClose-1, self.listHigh[-1]), angle=-90, brush=(0, 255, 0))#绿色
                 self.pw2.addItem(self.arrow)
 
-    #----------------------------------------------------------------------
-    def updateMarketData(self, event):
-        """更新行情"""
-        data = event.dict_['data']
-        print "update", data['InstrumentID']
-        symbol = data['InstrumentID']
-        tick = Tick(symbol)
-        tick.openPrice = data['OpenPrice']
-        tick.highPrice = data['HighestPrice']
-        tick.lowPrice = data['LowestPrice']
-        tick.lastPrice = data['LastPrice']
+    # #----------------------------------------------------------------------
+    # def updateMarketData(self, event):
+    #     """更新行情"""
+    #     data = event.dict_['data']
+    #     print "update", data['InstrumentID']
+    #     symbol = data['InstrumentID']
+    #     tick = Tick(symbol)
+    #     tick.openPrice = data['OpenPrice']
+    #     tick.highPrice = data['HighestPrice']
+    #     tick.lowPrice = data['LowestPrice']
+    #     tick.lastPrice = data['LastPrice']
+    #
+    #     tick.volume = data['Volume']
+    #     tick.openInterest = data['OpenInterest']
+    #
+    #     tick.upperLimit = data['UpperLimitPrice']
+    #     tick.lowerLimit = data['LowerLimitPrice']
+    #
+    #     tick.time = data['UpdateTime']
+    #     tick.ms = data['UpdateMillisec']
+    #
+    #     tick.bidPrice1 = data['BidPrice1']
+    #     tick.bidPrice2 = data['BidPrice2']
+    #     tick.bidPrice3 = data['BidPrice3']
+    #     tick.bidPrice4 = data['BidPrice4']
+    #     tick.bidPrice5 = data['BidPrice5']
+    #
+    #     tick.askPrice1 = data['AskPrice1']
+    #     tick.askPrice2 = data['AskPrice2']
+    #     tick.askPrice3 = data['AskPrice3']
+    #     tick.askPrice4 = data['AskPrice4']
+    #     tick.askPrice5 = data['AskPrice5']
+    #
+    #     tick.bidVolume1 = data['BidVolume1']
+    #     tick.bidVolume2 = data['BidVolume2']
+    #     tick.bidVolume3 = data['BidVolume3']
+    #     tick.bidVolume4 = data['BidVolume4']
+    #     tick.bidVolume5 = data['BidVolume5']
+    #
+    #     tick.askVolume1 = data['AskVolume1']
+    #     tick.askVolume2 = data['AskVolume2']
+    #     tick.askVolume3 = data['AskVolume3']
+    #     tick.askVolume4 = data['AskVolume4']
+    #     tick.askVolume5 = data['AskVolume5']
+    #
+    #     self.onTick(tick)  # tick数据更新
+    #
+    #     # # 将数据插入MongoDB数据库，实盘建议另开程序记录TICK数据
+    #     # self.__recordTick(data)
 
-        tick.volume = data['Volume']
-        tick.openInterest = data['OpenInterest']
-
-        tick.upperLimit = data['UpperLimitPrice']
-        tick.lowerLimit = data['LowerLimitPrice']
-
-        tick.time = data['UpdateTime']
-        tick.ms = data['UpdateMillisec']
-
-        tick.bidPrice1 = data['BidPrice1']
-        tick.bidPrice2 = data['BidPrice2']
-        tick.bidPrice3 = data['BidPrice3']
-        tick.bidPrice4 = data['BidPrice4']
-        tick.bidPrice5 = data['BidPrice5']
-
-        tick.askPrice1 = data['AskPrice1']
-        tick.askPrice2 = data['AskPrice2']
-        tick.askPrice3 = data['AskPrice3']
-        tick.askPrice4 = data['AskPrice4']
-        tick.askPrice5 = data['AskPrice5']
-
-        tick.bidVolume1 = data['BidVolume1']
-        tick.bidVolume2 = data['BidVolume2']
-        tick.bidVolume3 = data['BidVolume3']
-        tick.bidVolume4 = data['BidVolume4']
-        tick.bidVolume5 = data['BidVolume5']
-
-        tick.askVolume1 = data['AskVolume1']
-        tick.askVolume2 = data['AskVolume2']
-        tick.askVolume3 = data['AskVolume3']
-        tick.askVolume4 = data['AskVolume4']
-        tick.askVolume5 = data['AskVolume5']
-
-        self.onTick(tick)  # tick数据更新
-
-        # # 将数据插入MongoDB数据库，实盘建议另开程序记录TICK数据
-        # self.__recordTick(data)
-
-    #----------------------------------------------------------------------
-    def onTick(self, tick):
-        """tick数据更新"""
-        from datetime import time
-
-        # 首先生成datetime.time格式的时间（便于比较）,从字符串时间转化为time格式的时间
-        hh, mm, ss = tick.time.split(':')
-        if(len(ss) > 2):
-            ss1, ss2 = ss.split('.')
-            self.ticktime = time(int(hh), int(mm), int(ss1), microsecond=int(ss2)*100)
-        else:
-            self.ticktime = time(int(hh), int(mm), int(ss), microsecond=tick.ms)
-
-        # 计算tick图的相关参数
-        if self.ptr == 0:
-            self.fastMA = tick.lastPrice
-            self.midMA = tick.lastPrice
-            self.slowMA = tick.lastPrice
-        else:
-            self.fastMA = (1-self.tickFastAlpha) * self.fastMA + self.tickFastAlpha * tick.lastPrice
-            self.midMA = (1-self.tickMidAlpha) * self.midMA + self.tickMidAlpha * tick.lastPrice
-            self.slowMA = (1-self.tickSlowAlpha) * self.slowMA + self.tickSlowAlpha * tick.lastPrice
-        self.listlastPrice[self.ptr] = tick.lastPrice
-        self.listfastMA[self.ptr] = self.fastMA
-        self.listmidMA[self.ptr] = self.midMA
-        self.listslowMA[self.ptr] = self.slowMA
-
-        self.ptr += 1
-        print(self.ptr)
-        if self.ptr >= self.listlastPrice.shape[0]:
-            tmp = self.listlastPrice
-            self.listlastPrice = np.empty(self.listlastPrice.shape[0] * 2)
-            self.listlastPrice[:tmp.shape[0]] = tmp
-
-            tmp = self.listfastMA
-            self.listfastMA = np.empty(self.listfastMA.shape[0] * 2)
-            self.listfastMA[:tmp.shape[0]] = tmp
-
-            tmp = self.listmidMA
-            self.listmidMA = np.empty(self.listmidMA.shape[0] * 2)
-            self.listmidMA[:tmp.shape[0]] = tmp
-
-            tmp = self.listslowMA
-            self.listslowMA = np.empty(self.listslowMA.shape[0] * 2)
-            self.listslowMA[:tmp.shape[0]] = tmp
-
-        # K线数据
-        # 假设是收到的第一个TICK
-        if self.barOpen == 0:
-            # 初始化新的K线数据
-            self.barOpen = tick.lastPrice
-            self.barHigh = tick.lastPrice
-            self.barLow = tick.lastPrice
-            self.barClose = tick.lastPrice
-            self.barTime = self.ticktime
-            self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh)
-        else:
-            # 如果是当前一分钟内的数据
-            if self.ticktime.minute == self.barTime.minute:
-                if self.ticktime.second >= 30 and self.barTime.second < 30: # 判断30秒周期K线
-                    # 先保存K线收盘价
-                    self.num += 1
-                    self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh, self.barOpenInterest)
-                    # 初始化新的K线数据
-                    self.barOpen = tick.lastPrice
-                    self.barHigh = tick.lastPrice
-                    self.barLow = tick.lastPrice
-                    self.barClose = tick.lastPrice
-                    self.barTime = self.ticktime
-                # 汇总TICK生成K线
-                self.barHigh = max(self.barHigh, tick.lastPrice)
-                self.barLow = min(self.barLow, tick.lastPrice)
-                self.barClose = tick.lastPrice
-                self.barTime = self.ticktime
-                self.listBar.pop()
-                self.listfastEMA.pop()
-                self.listslowEMA.pop()
-                self.listOpen.pop()
-                self.listClose.pop()
-                self.listHigh.pop()
-                self.listLow.pop()
-                self.listOpenInterest.pop()
-                self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh)
-            # 如果是新一分钟的数据
-            else:
-                # 先保存K线收盘价
-                self.num += 1
-                self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh)
-                # 初始化新的K线数据
-                self.barOpen = tick.lastPrice
-                self.barHigh = tick.lastPrice
-                self.barLow = tick.lastPrice
-                self.barClose = tick.lastPrice
-                self.barTime = self.ticktime
+    # #----------------------------------------------------------------------
+    # def onTick(self, tick):
+    #     """tick数据更新"""
+    #     from datetime import time
+    #
+    #     # 首先生成datetime.time格式的时间（便于比较）,从字符串时间转化为time格式的时间
+    #     hh, mm, ss = tick.time.split(':')
+    #     if(len(ss) > 2):
+    #         ss1, ss2 = ss.split('.')
+    #         self.ticktime = time(int(hh), int(mm), int(ss1), microsecond=int(ss2)*100)
+    #     else:
+    #         self.ticktime = time(int(hh), int(mm), int(ss), microsecond=tick.ms)
+    #
+    #     # 计算tick图的相关参数
+    #     if self.ptr == 0:
+    #         self.fastMA = tick.lastPrice
+    #         self.midMA = tick.lastPrice
+    #         self.slowMA = tick.lastPrice
+    #     else:
+    #         self.fastMA = (1-self.tickFastAlpha) * self.fastMA + self.tickFastAlpha * tick.lastPrice
+    #         self.midMA = (1-self.tickMidAlpha) * self.midMA + self.tickMidAlpha * tick.lastPrice
+    #         self.slowMA = (1-self.tickSlowAlpha) * self.slowMA + self.tickSlowAlpha * tick.lastPrice
+    #     self.listlastPrice[self.ptr] = tick.lastPrice
+    #     self.listfastMA[self.ptr] = self.fastMA
+    #     self.listmidMA[self.ptr] = self.midMA
+    #     self.listslowMA[self.ptr] = self.slowMA
+    #
+    #     self.ptr += 1
+    #     print(self.ptr)
+    #     if self.ptr >= self.listlastPrice.shape[0]:
+    #         tmp = self.listlastPrice
+    #         self.listlastPrice = np.empty(self.listlastPrice.shape[0] * 2)
+    #         self.listlastPrice[:tmp.shape[0]] = tmp
+    #
+    #         tmp = self.listfastMA
+    #         self.listfastMA = np.empty(self.listfastMA.shape[0] * 2)
+    #         self.listfastMA[:tmp.shape[0]] = tmp
+    #
+    #         tmp = self.listmidMA
+    #         self.listmidMA = np.empty(self.listmidMA.shape[0] * 2)
+    #         self.listmidMA[:tmp.shape[0]] = tmp
+    #
+    #         tmp = self.listslowMA
+    #         self.listslowMA = np.empty(self.listslowMA.shape[0] * 2)
+    #         self.listslowMA[:tmp.shape[0]] = tmp
+    #
+    #     # K线数据
+    #     # 假设是收到的第一个TICK
+    #     if self.barOpen == 0:
+    #         # 初始化新的K线数据
+    #         self.barOpen = tick.lastPrice
+    #         self.barHigh = tick.lastPrice
+    #         self.barLow = tick.lastPrice
+    #         self.barClose = tick.lastPrice
+    #         self.barTime = self.ticktime
+    #         self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh)
+    #     else:
+    #         # 如果是当前一分钟内的数据
+    #         if self.ticktime.minute == self.barTime.minute:
+    #             if self.ticktime.second >= 30 and self.barTime.second < 30: # 判断30秒周期K线
+    #                 # 先保存K线收盘价
+    #                 self.num += 1
+    #                 self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh, self.barOpenInterest)
+    #                 # 初始化新的K线数据
+    #                 self.barOpen = tick.lastPrice
+    #                 self.barHigh = tick.lastPrice
+    #                 self.barLow = tick.lastPrice
+    #                 self.barClose = tick.lastPrice
+    #                 self.barTime = self.ticktime
+    #             # 汇总TICK生成K线
+    #             self.barHigh = max(self.barHigh, tick.lastPrice)
+    #             self.barLow = min(self.barLow, tick.lastPrice)
+    #             self.barClose = tick.lastPrice
+    #             self.barTime = self.ticktime
+    #             self.listBar.pop()
+    #             self.listfastEMA.pop()
+    #             self.listslowEMA.pop()
+    #             self.listOpen.pop()
+    #             self.listClose.pop()
+    #             self.listHigh.pop()
+    #             self.listLow.pop()
+    #             self.listOpenInterest.pop()
+    #             self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh)
+    #         # 如果是新一分钟的数据
+    #         else:
+    #             # 先保存K线收盘价
+    #             self.num += 1
+    #             self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh)
+    #             # 初始化新的K线数据
+    #             self.barOpen = tick.lastPrice
+    #             self.barHigh = tick.lastPrice
+    #             self.barLow = tick.lastPrice
+    #             self.barClose = tick.lastPrice
+    #             self.barTime = self.ticktime
 
     #----------------------------------------------------------------------
     def onBar(self, n, t, o, c, l, h):
@@ -1302,14 +1281,14 @@ class PriceWidget(QtGui.QWidget):
         self.listfastEMA.append(self.fastEMA)
         self.listslowEMA.append(self.slowEMA)
 
-        # 调用画图函数
-        self.plotKline()     # K线图
+        self.plotText()    #显示开仓位置
 
     # ----------------------------------------------------------------------
     #画合并后的K线Bar
     def onBarAfterFenXing(self, n, t, o, c, l, h):
         self.listBar.append((n, t, o, c, l, h))
 
+    def plotKlineAfterFenXing(self):
         # 画K线
         self.pw2.removeItem(self.candle)
         self.candle = self.CandlestickItem(self.listBar)
@@ -1326,40 +1305,40 @@ class PriceWidget(QtGui.QWidget):
         except ConnectionFailure:
             pass
 
-    #----------------------------------------------------------------------
-    def __recordTick(self, data):
-        """将Tick数据插入到MongoDB中"""
-        if self.__mongoConnected:
-            symbol = data['InstrumentID']
-            data['date'] = self.today
-            self.__mongoTickDB[symbol].insert(data)
+    # #----------------------------------------------------------------------
+    # def __recordTick(self, data):
+    #     """将Tick数据插入到MongoDB中"""
+    #     if self.__mongoConnected:
+    #         symbol = data['InstrumentID']
+    #         data['date'] = self.today
+    #         self.__mongoTickDB[symbol].insert(data)
+    #
+    # #----------------------------------------------------------------------
+    # def loadTick(self, symbol, startDate, endDate=None):
+    #     """从MongoDB中读取Tick数据"""
+    #     if symbol!='':
+    #         print 1
+    #         cx = self.__mongoTickDB[symbol].find()
+    #         print cx.count()
+    #         return cx
+    #     # if self.__mongoConnected:
+    #     #     collection = self.__mongoTickDB[symbol]
+    #     #
+    #     #     # 如果输入了读取TICK的最后日期
+    #     #     if endDate:
+    #     #         cx = collection.find({'date': {'$gte': startDate, '$lte': endDate}})
+    #     #     else:
+    #     #         cx = collection.find({'date': {'$gte': startDate}})
+    #     #     return cx
+    #     # else:
+    #     #     return None
 
-    #----------------------------------------------------------------------
-    def loadTick(self, symbol, startDate, endDate=None):
-        """从MongoDB中读取Tick数据"""
-        if symbol!='':
-            print 1
-            cx = self.__mongoTickDB[symbol].find()
-            print cx.count()
-            return cx
-        # if self.__mongoConnected:
-        #     collection = self.__mongoTickDB[symbol]
-        #
-        #     # 如果输入了读取TICK的最后日期
-        #     if endDate:
-        #         cx = collection.find({'date': {'$gte': startDate, '$lte': endDate}})
-        #     else:
-        #         cx = collection.find({'date': {'$gte': startDate}})
-        #     return cx
-        # else:
-        #     return None
-
-    #----------------------------------------------------------------------
-    def registerEvent(self):
-        """注册事件监听"""
-        print "connect"
-        self.signal.connect(self.updateMarketData)
-        self.__eventEngine.register(EVENT_MARKETDATA, self.signal.emit)
+    # #----------------------------------------------------------------------
+    # def registerEvent(self):
+    #     """注册事件监听"""
+    #     print "connect"
+    #     self.signal.connect(self.updateMarketData)
+    #     self.__eventEngine.register(EVENT_MARKETDATA, self.signal.emit)
 
 
 ########################################################################
@@ -1391,28 +1370,6 @@ class TickWidget(QtGui.QWidget):
     listfastEMA = []
     listslowEMA = []
 
-    # K线缓存对象
-    barOpen = 0
-    barHigh = 0
-    barLow = 0
-    barClose = 0
-    barTime = None
-    barOpenInterest = 0
-    num = 0
-
-    # 保存K线数据的列表对象
-    listBar = []
-    listClose = []
-    listHigh = []
-    listLow = []
-    listOpen = []
-    listOpenInterest = []
-
-    # 是否完成了历史数据的读取
-    initCompleted = True
-    # 初始化时读取的历史数据的起始日期(可以选择外部设置)
-    startDate = None
-    symbol = 'ag1706'
 
     class CandlestickItem(pg.GraphicsObject):
         def __init__(self, data):
@@ -1461,29 +1418,24 @@ class TickWidget(QtGui.QWidget):
 
         self.__eventEngine = eventEngine
         self.__mainEngine = chanlunEngine
-        # MongoDB数据库相关
-        self.__mongoConnected = False
-        self.__mongoConnection = None
-        self.__mongoTickDB = None
+        # # MongoDB数据库相关
+        # self.__mongoConnected = False
+        # self.__mongoConnection = None
+        # self.__mongoTickDB = None
 
         # 调用函数
-        self.__connectMongo()
-        self.initUi(startDate=None)
+        self.initUi()
         self.registerEvent()
 
     #----------------------------------------------------------------------
-    def initUi(self, startDate=None):
+    def initUi(self):
         """初始化界面"""
-        self.setWindowTitle(u'Price')
+        self.setWindowTitle(u'Tick')
 
         self.vbl_1 = QtGui.QHBoxLayout()
-
         self.initplotTick()  # plotTick初始化
 
         self.setLayout(self.vbl_1)
-
-        self.initHistoricalData()  # 下载历史Tick数据并画图
-        # self.plotMin()   #使用数据库中的分钟数据画K线
 
     #----------------------------------------------------------------------
     def initplotTick(self):
@@ -1492,6 +1444,7 @@ class TickWidget(QtGui.QWidget):
         self.vbl_1.addWidget(self.pw1)
         self.pw1.setMinimumWidth(1500)
         self.pw1.setMaximumWidth(1800)
+        self.pw1.setRange(xRange=[-360, 0])
         self.pw1.setLimits(xMax=5)
         self.pw1.setDownsampling(mode='peak')
         self.pw1.setClipToView(True)
@@ -1501,116 +1454,80 @@ class TickWidget(QtGui.QWidget):
         self.curve3 = self.pw1.plot()
         self.curve4 = self.pw1.plot()
 
-     #----------------------------------------------------------------------
-    def plotMin(self):
-        print "plotMinK start"
-        self.initCompleted = True
-        cx = self.__mongoMinDB[self.symbol].find()
-        print cx.count()
-        if cx:
-            for data in cx:
-                self.barOpen = data['open']
-                self.barClose = data['close']
-                self.barLow = data['low']
-                self.barHigh = data['high']
-                self.barOpenInterest = data['openInterest']
-                # print self.num, self.barOpen, self.barClose, self.barLow, self.barHigh, self.barOpenInterest
-                self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh, self.barOpenInterest)
-                self.num += 1
 
-        print "plotMinK success"
-
-
-    #----------------------------------------------------------------------
-    def initHistoricalData(self,startDate=None):
-        """初始历史数据"""
-        print "download histrical data"
-        self.initCompleted = True  # 读取历史数据完成
-        td = timedelta(days=1)     # 读取3天的历史TICK数据
-
-        if startDate:
-            cx = self.loadTick(self.symbol, startDate-td)
-        else:
-            today = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
-            cx = self.loadTick(self.symbol, today-td)
-
-        print cx.count()
-
-        if cx:
-            for data in cx:
-                tick = Tick(data['symbol'])
-
-                tick.openPrice = data['lastPrice']
-                tick.highPrice = data['upperLimit']
-                tick.lowPrice = data['lowerLimit']
-                tick.lastPrice = data['lastPrice']
-
-                tick.volume = data['volume']
-                tick.openInterest = data['openInterest']
-
-                tick.upperLimit = data['upperLimit']
-                tick.lowerLimit = data['lowerLimit']
-
-                tick.time = data['time']
-                # tick.ms = data['UpdateMillisec']
-
-                tick.bidPrice1 = data['bidPrice1']
-                tick.bidPrice2 = data['bidPrice2']
-                tick.bidPrice3 = data['bidPrice3']
-                tick.bidPrice4 = data['bidPrice4']
-                tick.bidPrice5 = data['bidPrice5']
-
-                tick.askPrice1 = data['askPrice1']
-                tick.askPrice2 = data['askPrice2']
-                tick.askPrice3 = data['askPrice3']
-                tick.askPrice4 = data['askPrice4']
-                tick.askPrice5 = data['askPrice5']
-
-                tick.bidVolume1 = data['bidVolume1']
-                tick.bidVolume2 = data['bidVolume2']
-                tick.bidVolume3 = data['bidVolume3']
-                tick.bidVolume4 = data['bidVolume4']
-                tick.bidVolume5 = data['bidVolume5']
-
-                tick.askVolume1 = data['askVolume1']
-                tick.askVolume2 = data['askVolume2']
-                tick.askVolume3 = data['askVolume3']
-                tick.askVolume4 = data['askVolume4']
-                tick.askVolume5 = data['askVolume5']
-
-                self.onTick(tick)
-
-        print('load historic data completed')
+    # #----------------------------------------------------------------------
+    # def initHistoricalData(self,startDate=None):
+    #     """初始历史数据"""
+    #     print "download histrical data"
+    #     self.initCompleted = True  # 读取历史数据完成
+    #     td = timedelta(days=1)     # 读取3天的历史TICK数据
+    #
+    #     if startDate:
+    #         cx = self.loadTick(self.symbol, startDate-td)
+    #     else:
+    #         today = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
+    #         cx = self.loadTick(self.symbol, today-td)
+    #
+    #     print cx.count()
+    #
+    #     if cx:
+    #         for data in cx:
+    #             tick = Tick(data['symbol'])
+    #
+    #             tick.openPrice = data['lastPrice']
+    #             tick.highPrice = data['upperLimit']
+    #             tick.lowPrice = data['lowerLimit']
+    #             tick.lastPrice = data['lastPrice']
+    #
+    #             tick.volume = data['volume']
+    #             tick.openInterest = data['openInterest']
+    #
+    #             tick.upperLimit = data['upperLimit']
+    #             tick.lowerLimit = data['lowerLimit']
+    #
+    #             tick.time = data['time']
+    #             # tick.ms = data['UpdateMillisec']
+    #
+    #             tick.bidPrice1 = data['bidPrice1']
+    #             tick.bidPrice2 = data['bidPrice2']
+    #             tick.bidPrice3 = data['bidPrice3']
+    #             tick.bidPrice4 = data['bidPrice4']
+    #             tick.bidPrice5 = data['bidPrice5']
+    #
+    #             tick.askPrice1 = data['askPrice1']
+    #             tick.askPrice2 = data['askPrice2']
+    #             tick.askPrice3 = data['askPrice3']
+    #             tick.askPrice4 = data['askPrice4']
+    #             tick.askPrice5 = data['askPrice5']
+    #
+    #             tick.bidVolume1 = data['bidVolume1']
+    #             tick.bidVolume2 = data['bidVolume2']
+    #             tick.bidVolume3 = data['bidVolume3']
+    #             tick.bidVolume4 = data['bidVolume4']
+    #             tick.bidVolume5 = data['bidVolume5']
+    #
+    #             tick.askVolume1 = data['askVolume1']
+    #             tick.askVolume2 = data['askVolume2']
+    #             tick.askVolume3 = data['askVolume3']
+    #             tick.askVolume4 = data['askVolume4']
+    #             tick.askVolume5 = data['askVolume5']
+    #
+    #             self.onTick(tick)
+    #
+    #     print('load historic data completed')
 
     #----------------------------------------------------------------------
     def plotTick(self):
         """画tick图"""
-        if self.initCompleted:
-            self.curve1.setData(self.listlastPrice[:self.ptr])
-            self.curve2.setData(self.listfastMA[:self.ptr], pen=(255, 0, 0), name="Red curve")
-            self.curve3.setData(self.listmidMA[:self.ptr], pen=(0, 255, 0), name="Green curve")
-            self.curve4.setData(self.listslowMA[:self.ptr], pen=(0, 0, 255), name="Blue curve")
-            self.curve1.setPos(-self.ptr, 0)
-            self.curve2.setPos(-self.ptr, 0)
-            self.curve3.setPos(-self.ptr, 0)
-            self.curve4.setPos(-self.ptr, 0)
+        self.curve1.setData(self.listlastPrice[:self.ptr])
+        self.curve2.setData(self.listfastMA[:self.ptr], pen=(255, 0, 0), name="Red curve")
+        self.curve3.setData(self.listmidMA[:self.ptr], pen=(0, 255, 0), name="Green curve")
+        self.curve4.setData(self.listslowMA[:self.ptr], pen=(0, 0, 255), name="Blue curve")
+        self.curve1.setPos(-self.ptr, 0)
+        self.curve2.setPos(-self.ptr, 0)
+        self.curve3.setPos(-self.ptr, 0)
+        self.curve4.setPos(-self.ptr, 0)
 
-
-    #----------------------------------------------------------------------
-    def plotText(self):
-        lenClose = len(self.listClose)
-
-        if lenClose >= 5:                                       # Fractal Signal
-            if self.listClose[-1] > self.listClose[-2] and self.listClose[-3] > self.listClose[-2] and self.listClose[-4] > self.listClose[-2] and self.listClose[-5] > self.listClose[-2] and self.listfastEMA[-1] > self.listslowEMA[-1]:
-                ## Draw an arrowhead next to the text box
-                # self.pw2.removeItem(self.arrow)
-                self.arrow = pg.ArrowItem(pos=(lenClose-1, self.listLow[-1]), angle=90, brush=(255, 0, 0))#红色
-                self.pw2.addItem(self.arrow)
-            elif self.listClose[-1] < self.listClose[-2] and self.listClose[-3] < self.listClose[-2] and self.listClose[-4] < self.listClose[-2] and self.listClose[-5] < self.listClose[-2] and self.listfastEMA[-1] < self.listslowEMA[-1]:
-                ## Draw an arrowhead next to the text box
-                # self.pw2.removeItem(self.arrow)
-                self.arrow = pg.ArrowItem(pos=(lenClose-1, self.listHigh[-1]), angle=-90, brush=(0, 255, 0))#绿色
-                self.pw2.addItem(self.arrow)
 
     #----------------------------------------------------------------------
     def updateMarketData(self, event):
@@ -1659,9 +1576,6 @@ class TickWidget(QtGui.QWidget):
 
         self.onTick(tick)  # tick数据更新
 
-        # # 将数据插入MongoDB数据库，实盘建议另开程序记录TICK数据
-        # self.__recordTick(data)
-
     #----------------------------------------------------------------------
     def onTick(self, tick):
         """tick数据更新"""
@@ -1669,11 +1583,7 @@ class TickWidget(QtGui.QWidget):
 
         # 首先生成datetime.time格式的时间（便于比较）,从字符串时间转化为time格式的时间
         hh, mm, ss = tick.time.split(':')
-        if(len(ss) > 2):
-            ss1, ss2 = ss.split('.')
-            self.ticktime = time(int(hh), int(mm), int(ss1), microsecond=int(ss2)*100)
-        else:
-            self.ticktime = time(int(hh), int(mm), int(ss), microsecond=tick.ms)
+        self.ticktime = time(int(hh), int(mm), int(ss), microsecond=tick.ms)
 
         # 计算tick图的相关参数
         if self.ptr == 0:
@@ -1690,7 +1600,6 @@ class TickWidget(QtGui.QWidget):
         self.listslowMA[self.ptr] = self.slowMA
 
         self.ptr += 1
-        print("----------")
         print(self.ptr)
         if self.ptr >= self.listlastPrice.shape[0]:
             tmp = self.listlastPrice
@@ -1709,122 +1618,51 @@ class TickWidget(QtGui.QWidget):
             self.listslowMA = np.empty(self.listslowMA.shape[0] * 2)
             self.listslowMA[:tmp.shape[0]] = tmp
 
-        # K线数据
-        # 假设是收到的第一个TICK
-        if self.barOpen == 0:
-            # 初始化新的K线数据
-            self.barOpen = tick.lastPrice
-            self.barHigh = tick.lastPrice
-            self.barLow = tick.lastPrice
-            self.barClose = tick.lastPrice
-            self.barTime = self.ticktime
-            self.barOpenInterest = tick.openInterest
-            self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh, self.barOpenInterest)
-        else:
-            # 如果是当前一分钟内的数据
-            if self.ticktime.minute == self.barTime.minute:
-                if self.ticktime.second >= 30 and self.barTime.second < 30: # 判断30秒周期K线
-                    # 先保存K线收盘价
-                    self.num += 1
-                    self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh, self.barOpenInterest)
-                    # 初始化新的K线数据
-                    self.barOpen = tick.lastPrice
-                    self.barHigh = tick.lastPrice
-                    self.barLow = tick.lastPrice
-                    self.barClose = tick.lastPrice
-                    self.barTime = self.ticktime
-                    self.barOpenInterest = tick.openInterest
-                # 汇总TICK生成K线
-                self.barHigh = max(self.barHigh, tick.lastPrice)
-                self.barLow = min(self.barLow, tick.lastPrice)
-                self.barClose = tick.lastPrice
-                self.barTime = self.ticktime
-                self.listBar.pop()
-                self.listfastEMA.pop()
-                self.listslowEMA.pop()
-                self.listOpen.pop()
-                self.listClose.pop()
-                self.listHigh.pop()
-                self.listLow.pop()
-                self.listOpenInterest.pop()
-                self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh, self.barOpenInterest)
-            # 如果是新一分钟的数据
-            else:
-                # 先保存K线收盘价
-                self.num += 1
-                self.onBar(self.num, self.barOpen, self.barClose, self.barLow, self.barHigh, self.barOpenInterest)
-                # 初始化新的K线数据
-                self.barOpen = tick.lastPrice
-                self.barHigh = tick.lastPrice
-                self.barLow = tick.lastPrice
-                self.barClose = tick.lastPrice
-                self.barTime = self.ticktime
-                self.barOpenInterest = tick.openInterest
+         # 调用画图函数
+        self.plotTick()  # tick图
+
 
     #----------------------------------------------------------------------
-    def onBar(self, n, o, c, l, h, oi):
-        self.listBar.append((n, o, c, l, h))
-        self.listOpen.append(o)
-        self.listClose.append(c)
-        self.listHigh.append(h)
-        self.listLow.append(l)
-        self.listOpenInterest.append(oi)
-
-        #计算K线图EMA均线
-        if self.fastEMA:
-            self.fastEMA = c*self.EMAFastAlpha + self.fastEMA*(1-self.EMAFastAlpha)
-            self.slowEMA = c*self.EMASlowAlpha + self.slowEMA*(1-self.EMASlowAlpha)
-        else:
-            self.fastEMA = c
-            self.slowEMA = c
-        self.listfastEMA.append(self.fastEMA)
-        self.listslowEMA.append(self.slowEMA)
-
-        # 调用画图函数
-        self.plotTick()      # tick图
-
-    #----------------------------------------------------------------------
-    def __connectMongo(self):
-        """连接MongoDB数据库"""
-        try:
-            self.__mongoConnection = pymongo.MongoClient("localhost", 27017)
-            self.__mongoConnected = True
-            self.__mongoTickDB = self.__mongoConnection['VnTrader_Tick_Db']
-            self.__mongoMinDB = self.__mongoConnection['VnTrader_1Min_Db']
-        except ConnectionFailure:
-            pass
-
-    #----------------------------------------------------------------------
-    def __recordTick(self, data):
-        """将Tick数据插入到MongoDB中"""
-        if self.__mongoConnected:
-            symbol = data['InstrumentID']
-            data['date'] = self.today
-            self.__mongoTickDB[symbol].insert(data)
-
-    #----------------------------------------------------------------------
-    def loadTick(self, symbol, startDate, endDate=None):
-        """从MongoDB中读取Tick数据"""
-        cx = self.__mongoTickDB[symbol].find()
-        print cx.count()
-        return cx
-        # if self.__mongoConnected:
-        #     collection = self.__mongoTickDB[symbol]
-        #
-        #     # 如果输入了读取TICK的最后日期
-        #     if endDate:
-        #         cx = collection.find({'date': {'$gte': startDate, '$lte': endDate}})
-        #     else:
-        #         cx = collection.find({'date': {'$gte': startDate}})
-        #     return cx
-        # else:
-        #     return None
+    # def __connectMongo(self):
+    #     """连接MongoDB数据库"""
+    #     try:
+    #         self.__mongoConnection = pymongo.MongoClient("localhost", 27017)
+    #         self.__mongoConnected = True
+    #         self.__mongoTickDB = self.__mongoConnection['VnTrader_Tick_Db']
+    #         self.__mongoMinDB = self.__mongoConnection['VnTrader_1Min_Db']
+    #     except ConnectionFailure:
+    #         pass
+    #
+    # #----------------------------------------------------------------------
+    # def __recordTick(self, data):
+    #     """将Tick数据插入到MongoDB中"""
+    #     if self.__mongoConnected:
+    #         symbol = data['InstrumentID']
+    #         data['date'] = self.today
+    #         self.__mongoTickDB[symbol].insert(data)
+    #
+    # #----------------------------------------------------------------------
+    # def loadTick(self, symbol, startDate, endDate=None):
+    #     """从MongoDB中读取Tick数据"""
+    #     cx = self.__mongoTickDB[symbol].find()
+    #     print cx.count()
+    #     return cx
+    #     # if self.__mongoConnected:
+    #     #     collection = self.__mongoTickDB[symbol]
+    #     #
+    #     #     # 如果输入了读取TICK的最后日期
+    #     #     if endDate:
+    #     #         cx = collection.find({'date': {'$gte': startDate, '$lte': endDate}})
+    #     #     else:
+    #     #         cx = collection.find({'date': {'$gte': startDate}})
+    #     #     return cx
+    #     # else:
+    #     #     return None
 
     #----------------------------------------------------------------------
     def registerEvent(self):
         """注册事件监听"""
         print "connect"
-        # self.__mainEngine.putMarketEvent()
         self.signal.connect(self.updateMarketData)
         self.__eventEngine.register(EVENT_MARKETDATA, self.signal.emit)
 
@@ -1873,4 +1711,3 @@ class Tick:
         self.askVolume3 = 0
         self.askVolume4 = 0
         self.askVolume5 = 0
-
