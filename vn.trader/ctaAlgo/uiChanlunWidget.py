@@ -55,6 +55,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.penLoaded = False
         self.segmentLoaded = False
         self.tickLoaded = False
+        self.priceLoaded = False
         self.instrumentid = ''
 
         self.initUi()
@@ -176,7 +177,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         # unit为int型获取分钟数据，为String类型获取日周月K线数据
         if type(unit) is types.IntType:
             #从通联数据端获取当日分钟数据并存入数据库
-            historyDataEngine.downloadFuturesIntradayBar(symbol, unit)
+            # historyDataEngine.downloadFuturesIntradayBar(symbol, unit)
             # 从数据库获取前几天的分钟数据
             cx = self.getDbData(symbol, unit)
             if cx:
@@ -222,7 +223,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         dbname = ''
         if unit == 1:
             dbname = MINUTE_DB_NAME
-            days = 1
+            days = 2
         elif unit == 5:
             dbname = MINUTE5_DB_NAME
             days = 2
@@ -283,38 +284,43 @@ class ChanlunEngineManager(QtGui.QWidget):
 
         self.penLoaded = False
         self.segmentLoaded = False
+        self.priceLoaded = True
 
-        # # 订阅合约[仿照ctaEngine.py写的]
-        # # 先取消订阅之前的合约，再订阅最新输入的合约
-        # contract = self.mainEngine.getContract(self.instrumentid)
-        # if contract:
-        #     req = VtSubscribeReq()
-        #     req.symbol = contract.symbol
-        #     self.mainEngine.unsubscribe(req, contract.gatewayName)
-        #
-        #     contract = self.mainEngine.getContract(instrumentid)
-        #     if contract:
-        #         req = VtSubscribeReq()
-        #         req.symbol = contract.symbol
-        #         self.mainEngine.subscribe(req, contract.gatewayName)
-        #     else:
-        #         self.chanlunEngine.writeChanlunLog(u'交易合约%s无法找到' % (instrumentid))
-        #
-        # # 重新注册事件监听
-        # self.eventEngine.unregister(EVENT_TICK + self.instrumentid, self.signal.emit)
-        # self.eventEngine.register(EVENT_TICK + instrumentid, self.signal.emit)
+        # 订阅合约[仿照ctaEngine.py写的]
+        # 先取消订阅之前的合约，再订阅最新输入的合约
+        contract = self.mainEngine.getContract(self.instrumentid)
+        if contract:
+            req = VtSubscribeReq()
+            req.symbol = contract.symbol
+            self.mainEngine.unsubscribe(req, contract.gatewayName)
+
+            contract = self.mainEngine.getContract(instrumentid)
+            if contract:
+                req = VtSubscribeReq()
+                req.symbol = contract.symbol
+                self.mainEngine.subscribe(req, contract.gatewayName)
+            else:
+                self.chanlunEngine.writeChanlunLog(u'交易合约%s无法找到' % (instrumentid))
+
+        # 重新注册事件监听
+        self.eventEngine.unregister(EVENT_TICK + self.instrumentid, self.signal.emit)
+        self.eventEngine.register(EVENT_TICK + instrumentid, self.signal.emit)
 
         # 更新目前的合约
         self.instrumentid = instrumentid
 
     def oneM(self):
         "打开1分钟K线图"
+        if self.tickLoaded:
+            self.vbox1.removeWidget(self.TickW)
+            self.TickW.deleteLater()
         self.chanlunEngine.writeChanlunLog(u'打开合约%s 1分钟K线图' % (self.instrumentid))
         # 从通联数据客户端获取数据
         self.data = self.downloadData(self.instrumentid, 1)
 
-        self.vbox1.removeWidget(self.PriceW)
-        self.PriceW.deleteLater()
+        if self.priceLoaded:
+            self.vbox1.removeWidget(self.PriceW)
+            self.PriceW.deleteLater()
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
@@ -459,14 +465,18 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.chanlunEngine.writeChanlunLog(u'打开tick图')
         self.vbox1.removeWidget(self.PriceW)
         self.PriceW.deleteLater()
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data, self)
-        self.vbox1.addWidget(self.PriceW)
+        # self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data, self)
+        # self.vbox1.addWidget(self.PriceW)
+        self.TickW = TickWidget(self.eventEngine, self.chanlunEngine, self)
+        self.vbox1.addWidget(self.TickW)
         self.tickLoaded = True
         self.penLoaded = False
         self.segmentLoaded = False
+        self.priceLoaded = False
     # ----------------------------------------------------------------------
     def shop(self):
         """加载买卖点"""
+        self.zhongShu()
         self.chanlunEngine.writeChanlunLog(u'买卖点加载成功')
     # ----------------------------------------------------------------------
     def restore(self):
@@ -630,15 +640,87 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.chanlunEngine.writeChanlunLog(u'分段加载成功')
         self.segmentLoaded = True
     # ----------------------------------------------------------------------
+    def zhongShu(self):
+        if not self.penLoaded:
+            self.pen()                #先分笔才能画走势中枢
+        temp_type = 0    #标志走势类型，向上为1，向下为2, 盘整为3, 未判断前三笔是否重合为0
+        i = 0
+        zhongshuType = []   # 记录所有的中枢向上或者向下，向上为1，向下为2
+        while i < len(self.fenX) - 5:
+            zhongshuX = []  # 记录每一个走势的中枢区域内点的横坐标
+            zhongshuY = []  # 记录每一个走势的中枢区域内点的纵坐标
+            if(self.fenY[i] > self.fenY[i + 1] and self.fenY[i] > self.fenY[i + 3] and self.fenY[i + 1] < self.fenY[
+                    i + 4]):
+                while (self.fenY[i] > self.fenY[i + 3] and self.fenY[i + 1] < self.fenY[i + 4]):
+                    temp_type = 2  # 向下线段，三笔重合
+                    zhongshuX.append(self.fenX[i + 1])
+                    zhongshuX.append(self.fenX[i + 2])
+                    zhongshuX.append(self.fenX[i + 3])
+                    zhongshuX.append(self.fenX[i + 4])
+                    zhongshuY.append(self.fenY[i + 1])
+                    zhongshuY.append(self.fenY[i + 2])
+                    zhongshuY.append(self.fenY[i + 3])
+                    zhongshuY.append(self.fenY[i + 4])
+                    i = i + 2
+            elif (self.fenY[i] < self.fenY[i + 1] and self.fenY[i] < self.fenY[i + 3] and self.fenY[i + 1] > self.fenY[
+                    i + 4]):
+                while(self.fenY[i] < self.fenY[i + 3] and self.fenY[i + 1] > self.fenY[i + 4]):
+                    temp_type = 1  # 向上线段，三笔重合
+                    zhongshuX.append(self.fenX[i + 1])
+                    zhongshuX.append(self.fenX[i + 2])
+                    zhongshuX.append(self.fenX[i + 3])
+                    zhongshuX.append(self.fenX[i + 4])
+                    zhongshuY.append(self.fenY[i + 1])
+                    zhongshuY.append(self.fenY[i + 2])
+                    zhongshuY.append(self.fenY[i + 3])
+                    zhongshuY.append(self.fenY[i + 4])
+                    i = i + 2
+            else:
+                temp_type = 0
+                i += 1
+                continue
+            j = 1
+            minX = min(zhongshuX)
+            minY = zhongshuY[j]
+            maxX = max(zhongshuX)
+            maxY = zhongshuY[j + 1]
+            while (j < len(zhongshuY)-3):
+                if (maxY > zhongshuY[j + 2]):
+                    maxY = zhongshuY[j + 2]
+                if (minY < zhongshuY[j + 3]):
+                    minY = zhongshuY[j + 3]
+                j = j + 2
+
+            print minX,minY
+            print maxX,maxY
+
+            temp_type = 0
+            i = i + 3
+
+        zhongX = []
+        zhongY = []
+        zhongX.append(minX)
+        zhongY.append(minY)
+        zhongX.append(minX)
+        zhongY.append(maxY)
+        zhongX.append(maxX)
+        zhongY.append(maxY)
+        zhongX.append(maxX)
+        zhongY.append(minY)
+        zhongX.append(minX)
+        zhongY.append(minY)
+        self.fenbi(zhongX, zhongY)
+
+    # ----------------------------------------------------------------------
     def updateChanlunLog(self, event):
         """更新缠论相关日志"""
         log = event.dict_['data']
         # print type(log)
-        if(log.logTime):
-            content = '\t'.join([log.logTime, log.logContent])
-            self.chanlunLogMonitor.append(content)
-        else:
-            print 0
+        # if not(type(log)==VtTickData):
+        #     content = '\t'.join([log.logTime, log.logContent])
+        #     self.chanlunLogMonitor.append(content)
+        # else:
+        #     print 0
     # ----------------------------------------------------------------------
     def fenbi(self, fenbix, fenbiy):
         self.PriceW.pw2.plotItem.plot(x=fenbix, y=fenbiy, pen=QtGui.QPen(QtGui.QColor(255, 236, 139)))
@@ -654,6 +736,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         # 保存分型后dataFrame的值
         after_fenxing = pd.DataFrame()
         temp_data = k_data[:1]
+        # print type(k_data),k_data,k_data[:1],temp_data.high[-1]
         zoushi = [3]  # 3-持平 4-向下 5-向上
         for i in xrange(len(k_data)):
             case1_1 = temp_data.high[-1] > k_data.high[i] and temp_data.low[-1] < k_data.low[i]  # 第1根包含第2根
@@ -1394,8 +1477,7 @@ class TickWidget(QtGui.QWidget):
         self.setWindowTitle(u'Price')
 
         self.vbl_1 = QtGui.QHBoxLayout()
-        # self.vbl_1.setColumnStretch(1,1)
-        # self.vbl_1.setRowStretch(1,1)
+
         self.initplotTick()  # plotTick初始化
 
         self.setLayout(self.vbl_1)
@@ -1410,7 +1492,6 @@ class TickWidget(QtGui.QWidget):
         self.vbl_1.addWidget(self.pw1)
         self.pw1.setMinimumWidth(1500)
         self.pw1.setMaximumWidth(1800)
-        self.pw1.setRange(xRange=[-360, 0])
         self.pw1.setLimits(xMax=5)
         self.pw1.setDownsampling(mode='peak')
         self.pw1.setClipToView(True)
