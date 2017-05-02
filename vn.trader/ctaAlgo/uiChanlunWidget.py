@@ -221,7 +221,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         #周六周日不交易，无分钟数据
         # 给数据库命名
         dbname = ''
-        days = 2
+        days = 7
         if unit == 1:
             dbname = MINUTE_DB_NAME
         elif unit == 5:
@@ -657,19 +657,29 @@ class ChanlunEngineManager(QtGui.QWidget):
         while i < len(self.fenX) - 5:
             zhongshuX = []  # 记录每一个走势的中枢区域内点的横坐标
             zhongshuY = []  # 记录每一个走势的中枢区域内点的纵坐标
-            if (self.fenY[i] > self.fenY[i + 1] and self.fenY[i] > self.fenY[i + 3] and self.fenY[i + 1] < self.fenY[i + 4]):
-                while (self.fenY[i] > self.fenY[i + 3] and self.fenY[i + 1] < self.fenY[i + 4]):
+            if (self.fenY[i] > self.fenY[i + 1] and self.fenY[i + 1] < self.fenY[i + 4]):
+                temp_low = max(self.fenY[i + 1], self.fenY[i+3])
+                temp_high = min(self.fenY[i + 2], self.fenY[i+4])
+                while (self.fenY[i + 1] < self.fenY[i + 4] and self.fenY[i+4] > temp_low and self.fenY[i+5] < temp_high):
                     temp_type = 2  # 向下线段，三笔重合
                     for j in xrange(4):
                         zhongshuX.append(self.fenX[i + j + 1])
-                        zhongshuY.append(self.fenY[i + j + 1])
+                    if self.fenY[i+5] > temp_low:
+                        temp_low = self.fenY[i+5]
+                    if self.fenY[i+4] < temp_high:
+                        temp_high = self.fenY[i+4]
                     i = i + 2
-            elif (self.fenY[i] < self.fenY[i + 1] and self.fenY[i] < self.fenY[i + 3] and self.fenY[i + 1] > self.fenY[i + 4]):
-                while (self.fenY[i] < self.fenY[i + 3] and self.fenY[i + 1] > self.fenY[i + 4]):
+            elif (self.fenY[i] < self.fenY[i + 1] and self.fenY[i + 1] > self.fenY[i + 4]):
+                temp_high = min(self.fenY[i + 1], self.fenY[i+3])
+                temp_low = max(self.fenY[i + 2], self.fenY[i+4])
+                while (self.fenY[i + 1] > self.fenY[i + 4] and self.fenY[i+4] <  temp_high and self.fenY[i+5] > temp_low):
                     temp_type = 1  # 向上线段，三笔重合
                     for j in xrange(4):
                         zhongshuX.append(self.fenX[i + j + 1])
-                        zhongshuY.append(self.fenY[i + j + 1])
+                    if self.fenY[i+5] < temp_high:
+                        temp_high = self.fenY[i+5]
+                    if self.fenY[i+4] > temp_low:
+                        temp_low = self.fenY[i+4]
                     i = i + 2
             else:
                 temp_type = 0
@@ -677,26 +687,28 @@ class ChanlunEngineManager(QtGui.QWidget):
                 continue
 
             #画出当前判断出的中枢
-            minX, maxX = min(zhongshuX), max(zhongshuX)
-            Y1, Y2 = [], []
-            j = 0
-            while j < len(zhongshuY)-1:
-                Y1.append(zhongshuY[j])
-                Y2.append(zhongshuY[j+1])
-                j += 2
-            if temp_type == 2:  # 向下线段
-                minY = max(Y1)
-                maxY = min(Y2)
-            elif temp_type == 1:  # 向上线段
-                minY = max(Y2)
-                maxY = min(Y1)
+            if zhongshuX:
+                minX, maxX = min(zhongshuX), max(zhongshuX)
+                minY, maxY = temp_low, temp_high
+            # Y1, Y2 = [], []
+            # j = 0
+            # while j < len(zhongshuY)-1:
+            #     Y1.append(zhongshuY[j])
+            #     Y2.append(zhongshuY[j+1])
+            #     j += 2
+            # if temp_type == 2:  # 向下线段
+            #     minY = max(Y1)
+            #     maxY = min(Y2)
+            # elif temp_type == 1:  # 向上线段
+            #     minY = max(Y2)
+            #     maxY = min(Y1)
 
-            if maxY > minY:
-                print minX, minY
-                print maxX, maxY
-                plotX = [minX, minX, maxX, maxX, minX]
-                plotY = [minY, maxY, maxY, minY, minY]
-                self.fenbi(plotX, plotY)
+            print minX, minY, maxX, maxY
+            plotX = [minX, minX, maxX, maxX, minX]
+            plotY = [minY, maxY, maxY, minY, minY]
+            plotX = [int(x) for x in plotX]
+            plotY = [int(y) for y in plotY]
+            self.zhongshu(plotX, plotY)
 
             temp_type = 0
             i = i + 3
@@ -708,6 +720,9 @@ class ChanlunEngineManager(QtGui.QWidget):
 
     def fenduan(self, fenduanx, fenduany):
         self.PriceW.pw2.plot(x=fenduanx, y=fenduany, symbol='o', pen=QtGui.QPen(QtGui.QColor(131, 111, 255)))
+
+    def zhongshu(self, zhongshux, zhongshuy):
+        self.PriceW.pw2.plot(x=zhongshux, y=zhongshuy, pen=QtGui.QPen(QtGui.QColor(180, 167, 214)))
     
     # ----------------------------------------------------------------------
     # 判断包含关系，仿照聚框，合并K线数据
