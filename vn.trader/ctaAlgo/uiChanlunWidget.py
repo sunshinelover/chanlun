@@ -55,6 +55,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.penLoaded = False
         self.segmentLoaded = False
         self.tickLoaded = False
+        self.zhongShuLoaded = False
         self.instrumentid = ''
 
         self.initUi()
@@ -76,9 +77,11 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.data = pd.DataFrame() #画图所需数据, 重要
         self.fenX = [] #分笔分段所需X轴坐标
         self.fenY = [] #分笔分段所需Y轴坐标
+        self.zhongshuPos = [] #中枢的位置
+        self.zhongShuType = [] #中枢的方向
         # 金融图
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
-        self.TickW = None
+        self.TickW = TickWidget(self.eventEngine, self.chanlunEngine)
 
         # MongoDB数据库相关
         self.__mongoConnected = False
@@ -91,11 +94,13 @@ class ChanlunEngineManager(QtGui.QWidget):
         # 按钮
         penButton = QtGui.QPushButton(u'分笔')
         segmentButton = QtGui.QPushButton(u'分段')
+        zhongshuButton = QtGui.QPushButton(u'走势中枢')
         shopButton = QtGui.QPushButton(u'买卖点')
         restoreButton = QtGui.QPushButton(u'还原')
 
         penButton.clicked.connect(self.pen)
         segmentButton.clicked.connect(self.segment)
+        zhongshuButton.clicked.connect(self.zhongShu)
         shopButton.clicked.connect(self.shop)
         restoreButton.clicked.connect(self.restore)
 
@@ -109,6 +114,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.hbox2.addWidget(self.codeEdit)
         self.hbox2.addWidget(penButton)
         self.hbox2.addWidget(segmentButton)
+        self.hbox2.addWidget(zhongshuButton)
         self.hbox2.addWidget(shopButton)
         self.hbox2.addWidget(restoreButton)
         self.hbox2.addStretch()
@@ -177,7 +183,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         # unit为int型获取分钟数据，为String类型获取日周月K线数据
         if type(unit) is types.IntType:
             #从通联数据端获取当日分钟数据并存入数据库
-            historyDataEngine.downloadFuturesIntradayBar(symbol, unit)
+            # historyDataEngine.downloadFuturesIntradayBar(symbol, unit)
             # 从数据库获取前几天的分钟数据
             cx = self.getDbData(symbol, unit)
             if cx:
@@ -221,13 +227,15 @@ class ChanlunEngineManager(QtGui.QWidget):
         #周六周日不交易，无分钟数据
         # 给数据库命名
         dbname = ''
-        days = 7
+        days = 2
         if unit == 1:
             dbname = MINUTE_DB_NAME
+            days = 7
         elif unit == 5:
             dbname = MINUTE5_DB_NAME
         elif unit == 15:
             dbname = MINUTE15_DB_NAME
+            days = 7
         elif unit == 30:
             dbname = MINUTE30_DB_NAME
             days = 7
@@ -266,8 +274,13 @@ class ChanlunEngineManager(QtGui.QWidget):
         # 从通联数据客户端获取当日分钟数据
         self.data = self.downloadData(instrumentid, 1)
 
-        self.vbox1.removeWidget(self.PriceW)
-        self.PriceW.deleteLater()
+        if self.tickLoaded:
+            self.vbox1.removeWidget(self.TickW)
+            self.TickW.deleteLater()
+        else:
+            self.vbox1.removeWidget(self.PriceW)
+            self.PriceW.deleteLater()
+
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
         # 画K线图
@@ -276,6 +289,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.penLoaded = False
         self.segmentLoaded = False
         self.tickLoaded = False
+        self.zhongShuLoaded = False
 
         # # 订阅合约[仿照ctaEngine.py写的]
         # # 先取消订阅之前的合约，再订阅最新输入的合约
@@ -306,16 +320,23 @@ class ChanlunEngineManager(QtGui.QWidget):
         # 从通联数据客户端获取数据
         self.data = self.downloadData(self.instrumentid, 1)
 
-        self.vbox1.removeWidget(self.PriceW)
-        self.PriceW.deleteLater()
+        if self.tickLoaded:
+            self.vbox1.removeWidget(self.TickW)
+            self.TickW.deleteLater()
+        else:
+            self.vbox1.removeWidget(self.PriceW)
+            self.PriceW.deleteLater()
+
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
         # 画K线图
         self.PriceW.plotHistorticData()
 
+        self.tickLoaded = False
         self.penLoaded = False
         self.segmentLoaded = False
+        self.zhongShuLoaded = False
 
     # ----------------------------------------------------------------------
     def fiveM(self):
@@ -325,16 +346,23 @@ class ChanlunEngineManager(QtGui.QWidget):
         # 从通联数据客户端获取数据
         self.data = self.downloadData(self.instrumentid, 5)
 
-        self.vbox1.removeWidget(self.PriceW)
-        self.PriceW.deleteLater()
+        if self.tickLoaded:
+            self.vbox1.removeWidget(self.TickW)
+            self.TickW.deleteLater()
+        else:
+            self.vbox1.removeWidget(self.PriceW)
+            self.PriceW.deleteLater()
+
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
         # 画K线图
         self.PriceW.plotHistorticData()
 
+        self.tickLoaded = False
         self.penLoaded = False
         self.segmentLoaded = False
+        self.zhongShuLoaded = False
 
 
     # ----------------------------------------------------------------------
@@ -345,16 +373,23 @@ class ChanlunEngineManager(QtGui.QWidget):
         # 从通联数据客户端获取数据
         self.data = self.downloadData(self.instrumentid, 15)
 
-        self.vbox1.removeWidget(self.PriceW)
-        self.PriceW.deleteLater()
+        if self.tickLoaded:
+            self.vbox1.removeWidget(self.TickW)
+            self.TickW.deleteLater()
+        else:
+            self.vbox1.removeWidget(self.PriceW)
+            self.PriceW.deleteLater()
+
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
         # 画K线图
         self.PriceW.plotHistorticData()
 
+        self.tickLoaded = False
         self.penLoaded = False
         self.segmentLoaded = False
+        self.zhongShuLoaded = False
 
     # ----------------------------------------------------------------------
     def thirtyM(self):
@@ -363,16 +398,23 @@ class ChanlunEngineManager(QtGui.QWidget):
         # 从通联数据客户端获取数据
         self.data = self.downloadData(self.instrumentid, 30)
 
-        self.vbox1.removeWidget(self.PriceW)
-        self.PriceW.deleteLater()
+        if self.tickLoaded:
+            self.vbox1.removeWidget(self.TickW)
+            self.TickW.deleteLater()
+        else:
+            self.vbox1.removeWidget(self.PriceW)
+            self.PriceW.deleteLater()
+
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
         # 画K线图
         self.PriceW.plotHistorticData()
 
+        self.tickLoaded = False
         self.penLoaded = False
         self.segmentLoaded = False
+        self.zhongShuLoaded = False
 
 
     # ----------------------------------------------------------------------
@@ -382,16 +424,23 @@ class ChanlunEngineManager(QtGui.QWidget):
         # 从通联数据客户端获取数据
         self.data = self.downloadData(self.instrumentid, 60)
 
-        self.vbox1.removeWidget(self.PriceW)
-        self.PriceW.deleteLater()
+        if self.tickLoaded:
+            self.vbox1.removeWidget(self.TickW)
+            self.TickW.deleteLater()
+        else:
+            self.vbox1.removeWidget(self.PriceW)
+            self.PriceW.deleteLater()
+
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
         # 画K线图
         self.PriceW.plotHistorticData()
 
+        self.tickLoaded = False
         self.penLoaded = False
         self.segmentLoaded = False
+        self.zhongShuLoaded = False
 
 
     # ----------------------------------------------------------------------
@@ -401,16 +450,23 @@ class ChanlunEngineManager(QtGui.QWidget):
         # 从通联数据客户端获取数据
         self.data = self.downloadData(self.instrumentid, "daily")
 
-        self.vbox1.removeWidget(self.PriceW)
-        self.PriceW.deleteLater()
+        if self.tickLoaded:
+            self.vbox1.removeWidget(self.TickW)
+            self.TickW.deleteLater()
+        else:
+            self.vbox1.removeWidget(self.PriceW)
+            self.PriceW.deleteLater()
+
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
         # 画K线图
         self.PriceW.plotHistorticData()
 
+        self.tickLoaded = False
         self.penLoaded = False
         self.segmentLoaded = False
+        self.zhongShuLoaded = False
         
     # ----------------------------------------------------------------------
     def weekly(self):
@@ -419,16 +475,23 @@ class ChanlunEngineManager(QtGui.QWidget):
         # 从通联数据客户端获取数据
         self.data = self.downloadData(self.instrumentid, "weekly")
         
-        self.vbox1.removeWidget(self.PriceW)
-        self.PriceW.deleteLater()
+        if self.tickLoaded:
+            self.vbox1.removeWidget(self.TickW)
+            self.TickW.deleteLater()
+        else:
+            self.vbox1.removeWidget(self.PriceW)
+            self.PriceW.deleteLater()
+
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
         # 画K线图
         self.PriceW.plotHistorticData()
-        
+
+        self.tickLoaded = False
         self.penLoaded = False
         self.segmentLoaded = False
+        self.zhongShuLoaded = False
     
     def monthly(self):
         """打开月K线图"""
@@ -436,16 +499,23 @@ class ChanlunEngineManager(QtGui.QWidget):
         # 从通联数据客户端获取数据并画图
         self.data = self.downloadData(self.instrumentid, "monthly")
         
-        self.vbox1.removeWidget(self.PriceW)
-        self.PriceW.deleteLater()
+        if self.tickLoaded:
+            self.vbox1.removeWidget(self.TickW)
+            self.TickW.deleteLater()
+        else:
+            self.vbox1.removeWidget(self.PriceW)
+            self.PriceW.deleteLater()
+
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
         self.vbox1.addWidget(self.PriceW)
 
         # 画K线图
         self.PriceW.plotHistorticData()
-        
+
+        self.tickLoaded = False
         self.penLoaded = False
         self.segmentLoaded = False
+        self.zhongShuLoaded = False
     # ----------------------------------------------------------------------
     def openTick(self):
         """切换成tick图"""
@@ -459,10 +529,58 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.tickLoaded = True
         self.penLoaded = False
         self.segmentLoaded = False
+        self.zhongShuLoaded = False
+
     # ----------------------------------------------------------------------
     def shop(self):
         """加载买卖点"""
-        self.zhongShu()
+        if not self.zhongShuLoaded:
+            self.zhongShu()
+        i = 0
+        while i < len(self.zhongshuPos) - 2:
+            startPos, endPos = self.zhongshuPos[i], self.zhongshuPos[i+1]   #中枢开始段的位置和结束段的位置
+
+            if endPos+1 == len(self.fenY):
+                break
+            startY = self.fenY[startPos+1] - self.fenY[startPos]   #开始段Y轴距离
+            startX = self.fenX[startPos+1] - self.fenX[startPos]   #开始段X轴距离
+            startK = abs(startY * startX)  #开始段投影面积
+
+            endY = self.fenY[endPos + 1] - self.fenY[endPos]  # 结束段Y轴距离
+            endX = self.fenX[endPos + 1] - self.fenX[endPos]  # 结束段段X轴距离
+            endK = abs(endY * endX)  # 开始段投影面积
+
+            if endK < startK:
+                print startPos, endPos
+                if self.zhongShuType[i/2] == 1 and self.zhongShuType[i/2 + 1] == -1:
+                    #一卖
+                    self.sellpoint([self.fenX[endPos + 1]], [self.fenY[endPos + 1]], 1)
+                    #二卖，一卖后一个顶点
+                    if endPos < len(self.fenX) - 3:
+                        self.sellpoint([self.fenX[endPos + 3]], [self.fenY[endPos + 3]], 2)
+                    #三卖，一卖之后中枢结束段的第一个顶
+                    if i < len(self.zhongshuPos) - 3:
+                        nextPos = self.zhongshuPos[i+3]  #下一个中枢结束位置
+                        if self.fenY[nextPos+1] > self.fenY[nextPos]:
+                            self.sellpoint([self.fenX[nextPos + 1]], [self.fenY[nextPos + 1]], 3)
+                        else:
+                            self.sellpoint([self.fenX[nextPos]], [self.fenY[nextPos]], 3)
+                elif self.zhongShuType[i/2] == -1 and self.zhongShuType[i/2 + 1] == 1:
+                    #一买
+                    self.buypoint([self.fenX[endPos + 1]], [self.fenY[endPos + 1]], 1)
+                    # 二买，一买后一个底点
+                    if endPos < len(self.fenX) - 3:
+                        self.buypoint([self.fenX[endPos + 3]], [self.fenY[endPos + 3]], 2)
+                    # 三买，一买之后中枢结束段的第一个顶
+                    if i < len(self.zhongshuPos) - 3:
+                        nextPos = self.zhongshuPos[i + 3]  # 下一个中枢结束位置
+                        if self.fenY[nextPos + 1] < self.fenY[nextPos]:
+                            self.buypoint([self.fenX[nextPos + 1]], [self.fenY[nextPos + 1]], 3)
+                        else:
+                            self.buypoint([self.fenX[nextPos]], [self.fenY[nextPos]], 3)
+
+            i = i+2
+
         self.chanlunEngine.writeChanlunLog(u'买卖点加载成功')
     # ----------------------------------------------------------------------
     def restore(self):
@@ -471,14 +589,22 @@ class ChanlunEngineManager(QtGui.QWidget):
         if self.tickLoaded:
             self.vbox1.removeWidget(self.TickW)
             self.TickW.deleteLater()
-        self.vbox1.removeWidget(self.PriceW)
-        self.PriceW.deleteLater()
+        else:
+            self.vbox1.removeWidget(self.PriceW)
+            self.PriceW.deleteLater()
+
+        self.data = self.downloadData(self.instrumentid, 1)
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data, self)
         self.vbox1.addWidget(self.PriceW)
-        self.PriceW.plotHistorticData(self.instrumentid, 5)#最后改为1分钟 测试为了速率先写5分钟
+
+        # 画K线图
+        self.PriceW.plotHistorticData()
+
         self.chanlunEngine.writeChanlunLog(u'还原为1分钟k线图')
         self.penLoaded = False
         self.segmentLoaded = False
+        self.tickLoaded = False
+
     # ----------------------------------------------------------------------
     def pen(self):
         """加载分笔"""
@@ -499,10 +625,8 @@ class ChanlunEngineManager(QtGui.QWidget):
 
             arrayFenxingdata = np.array(fenxing_data)
             arrayTypedata = np.array(fenxing_type)
-            self.fenX = []
             self.fenY = []
             self.fenX = [m[0] for m in arrayFenxingdata]
-            print 'x', self.fenX
             fenbiY1 = [m[4] for m in arrayFenxingdata]  # 顶分型标志最高价
             fenbiY2 = [m[3] for m in arrayFenxingdata]  # 底分型标志最低价
             for i in xrange(len(self.fenX)):
@@ -514,9 +638,11 @@ class ChanlunEngineManager(QtGui.QWidget):
                 if self.fenX:
                     self.fenX.append(self.fenX[-1])
                     self.fenY.append(self.fenY[-1])
-                    print self.fenX
-                    print self.fenY
+                    print "self.fenX: ", self.fenX
+                    print "self.fenY: ", self.fenY
                     self.fenbi(self.fenX, self.fenY)
+                    self.fenX.pop()
+                    self.fenY.pop()
 
             self.chanlunEngine.writeChanlunLog(u'分笔加载成功')
             self.penLoaded = True
@@ -556,7 +682,6 @@ class ChanlunEngineManager(QtGui.QWidget):
                         # 顶底出现顶分型，向上线段结束
                         if high[j+1] > high[j] and high[j+1] > high[j+2]:
                             num = i + 2 * j + 3   #线段结束点位置
-                            print num
                             segmentX.append(self.fenX[num])
                             segmentY.append(self.fenY[num])
                             i = num
@@ -571,7 +696,6 @@ class ChanlunEngineManager(QtGui.QWidget):
                         # 顶底出现底分型，向上线段结束
                         if low[j + 1] < low[j] and low[j + 1] < low[j + 2]:
                             num = i + 2 * j + 1  # 线段结束点位置
-                            print num
                             segmentX.append(self.fenX[num])
                             segmentY.append(self.fenY[num])
                             i = num
@@ -594,7 +718,6 @@ class ChanlunEngineManager(QtGui.QWidget):
                         # 顶底出现底分型，向下线段结束
                         if low[j + 1] < low[j] and low[j + 1] < low[j + 2]:
                             num = i + 2 * j + 3  # 线段结束点位置
-                            print num
                             segmentX.append(self.fenX[num])
                             segmentY.append(self.fenY[num])
                             i = num
@@ -609,7 +732,6 @@ class ChanlunEngineManager(QtGui.QWidget):
                     # 顶底出现顶分型，向下线段结束
                         if high[j + 1] > high[j] and high[j + 1] > high[j + 2]:
                             num = i + 2 * j + 1  # 线段结束点位置
-                            print num
                             segmentX.append(self.fenX[num])
                             segmentY.append(self.fenY[num])
                             i = num
@@ -618,10 +740,10 @@ class ChanlunEngineManager(QtGui.QWidget):
                         j += 1
                     if j == len(high) - 2:
                         break
-        print segmentX
-        print segmentY
+        print "segmentX: ", segmentX
+        print "segmentY: ", segmentY
         if not self.segmentLoaded:
-            if segmentX:
+            if len(segmentX) > 1:
                 segmentX.append(segmentX[-1])
                 segmentY.append(segmentY[-1])
                 segmentX = [int(x) for x in segmentX]
@@ -643,55 +765,75 @@ class ChanlunEngineManager(QtGui.QWidget):
     def zhongShu(self):
         if not self.penLoaded:
             self.pen()  # 先分笔才能画走势中枢
-        temp_type = 0  # 标志走势类型，向上为1，向下为2, 盘整为3, 未判断前三笔是否重合为0
+        # temp_type = 0  # 标志中枢方向，向上为1，向下为-1
         i = 0
         temp_high, temp_low = 0, 0
-        zhongshuType = []  # 记录所有的中枢向上或者向下，向上为1，向下为2
+        minX, maxY = 0, 0
+        self.zhongshuPos = []  # 记录所有的中枢开始段和结束段的位置
+        self.zhongShuType = [] #记录所有中枢的方向
         while i < len(self.fenX) - 4:
-            zhongshuX = []  # 记录每一个走势的中枢区域内点的横坐标
-            zhongshuY = []  # 记录每一个走势的中枢区域内点的纵坐标
             if (self.fenY[i] > self.fenY[i + 1] and self.fenY[i + 1] < self.fenY[i + 4]):
-                temp_type = 2  # 向下线段，三笔重合
                 temp_low = max(self.fenY[i + 1], self.fenY[i + 3])
                 temp_high = min(self.fenY[i + 2], self.fenY[i + 4])
-                while (self.fenY[i + 1] < self.fenY[i + 4] and self.fenY[i + 4] > temp_low and self.fenY[
-                        i + 3] < temp_high):
-                    for j in xrange(4):
-                        zhongshuX.append(self.fenX[i + j + 1])
-                    if self.fenY[i + 3] > temp_low:
-                        temp_low = self.fenY[i + 3]
-                    if self.fenY[i + 4] < temp_high:
-                        temp_high = self.fenY[i + 4]
-                    i = i + 2
-                    if i >= len(self.fenX) - 4:
+                minX = self.fenX[i+1]
+                self.zhongshuPos.append(i)
+                self.zhongShuType.append(-1)
+                j = i
+                while i < len(self.fenX) - 4:
+                    j = i
+                    if self.fenY[i + 1] < self.fenY[i + 4] and self.fenY[i + 4] > temp_low and self.fenY[i + 3] < temp_high :
+                        maxX = self.fenX[i+4]
+                        if self.fenY[i + 3] > temp_low:
+                            temp_low = self.fenY[i + 3]
+                        if self.fenY[i + 4] < temp_high:
+                            temp_high = self.fenY[i + 4]
+                        i = i + 1
+                    elif self.fenY[i + 1] > self.fenY[i + 4] and self.fenY[i + 4] < temp_high and self.fenY[i + 3] > temp_low :
+                        maxX = self.fenX[i + 4]
+                        if self.fenY[i + 3] < temp_high:
+                            temp_high = self.fenY[i + 3]
+                        if self.fenY[i + 4] > temp_low:
+                            temp_low = self.fenY[i + 4]
+                        i = i + 1
+                    if j == i:
                         break
             elif (self.fenY[i] < self.fenY[i + 1] and self.fenY[i + 1] > self.fenY[i + 4]):
-                temp_type = 1  # 向上线段，三笔重合
                 temp_high = min(self.fenY[i + 1], self.fenY[i + 3])
                 temp_low = max(self.fenY[i + 2], self.fenY[i + 4])
-                while (self.fenY[i + 1] > self.fenY[i + 4] and self.fenY[i + 4] < temp_high and self.fenY[
-                        i + 3] > temp_low):
-                    for j in xrange(4):
-                        zhongshuX.append(self.fenX[i + j + 1])
-                    if self.fenY[i + 3] < temp_high:
-                        temp_high = self.fenY[i + 3]
-                    if self.fenY[i + 4] > temp_low:
-                        temp_low = self.fenY[i + 4]
-                    i = i + 2
-                    if i >= len(self.fenX) - 4:
+                minX = self.fenX[i + 1]
+                self.zhongshuPos.append(i)
+                self.zhongShuType.append(1)
+                j = i
+                while i < len(self.fenX) - 4:
+                    j = i
+                    if self.fenY[i + 1] > self.fenY[i + 4] and self.fenY[i + 4] < temp_high and self.fenY[i + 3] > temp_low:
+                        maxX = self.fenX[i + 4]
+                        if self.fenY[i + 3] < temp_high:
+                            temp_high = self.fenY[i + 3]
+                        if self.fenY[i + 4] > temp_low:
+                            temp_low = self.fenY[i + 4]
+                        i = i + 1
+                    elif self.fenY[i + 1] < self.fenY[i + 4] and self.fenY[i + 4] > temp_low and self.fenY[i + 3] < temp_high:
+                        maxX = self.fenX[i + 4]
+                        if self.fenY[i + 3] > temp_low:
+                            temp_low = self.fenY[i + 3]
+                        if self.fenY[i + 4] < temp_high:
+                            temp_high = self.fenY[i + 4]
+                        i = i + 1
+                    if i == j:
                         break
             else:
-                temp_type = 0
                 i += 1
                 continue
 
             # 画出当前判断出的中枢
-            if temp_high != 0 and temp_low != 0 and not zhongshuX:
-                for j in xrange(4):
-                    zhongshuX.append(self.fenX[i + j + 1])
-                i = i + 2
+            if minX != 0 and maxX == 0:
+                maxX = self.fenX[i+4]
+                i = i + 1
+                self.zhongshuPos.append(i + 4)
+            else:
+                self.zhongshuPos.append(i + 3)
 
-            minX, maxX = min(zhongshuX), max(zhongshuX)
             minY, maxY = temp_low, temp_high
 
             print minX, minY, maxX, maxY
@@ -702,8 +844,10 @@ class ChanlunEngineManager(QtGui.QWidget):
                 plotY = [int(y) for y in plotY]
                 self.zhongshu(plotX, plotY)
 
-            temp_type = 0
-            i = i + 2
+            i = i + 4
+
+        self.zhongShuLoaded = True
+        self.chanlunEngine.writeChanlunLog(u'走势中枢加载成功')
     # ----------------------------------------------------------------------
     def fenbi(self, fenbix, fenbiy):
         self.PriceW.pw2.plotItem.plot(x=fenbix, y=fenbiy, pen=QtGui.QPen(QtGui.QColor(255, 236, 139)))
@@ -712,8 +856,25 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.PriceW.pw2.plot(x=fenduanx, y=fenduany, symbol='o', pen=QtGui.QPen(QtGui.QColor(131, 111, 255)))
 
     def zhongshu(self, zhongshux, zhongshuy):
-        self.PriceW.pw2.plot(x=zhongshux, y=zhongshuy, pen=QtGui.QPen(QtGui.QColor(180, 167, 214)))
-    
+        self.PriceW.pw2.plot(x=zhongshux, y=zhongshuy, pen=QtGui.QPen(QtGui.QColor(255,165,0)))
+
+    def buypoint(self, buyx, buyy, point):
+        if point == 1:
+            self.PriceW.pw2.plot(x=buyx, y=buyy, symbolSize=18, symbolBrush=(255,0,0), symbolPen=(255,0,0), symbol='star')
+        elif point == 2:
+            self.PriceW.pw2.plot(x=buyx, y=buyy, symbolSize=18, symbolBrush=(238,130,238), symbolPen=(238,130,238),symbol='star')
+        elif point == 3:
+            self.PriceW.pw2.plot(x=buyx, y=buyy, symbolSize=18, symbolBrush=(138,43,226), symbolPen=(138,43,226),symbol='star')
+
+    def sellpoint(self, sellx, selly, point):
+        if point == 1:
+            self.PriceW.pw2.plot(x=sellx, y=selly,  symbolSize=18, symbolBrush=(119,172,48), symbolPen=(119,172,48), symbol='star')
+        elif point == 2:
+                self.PriceW.pw2.plot(x=sellx, y=selly, symbolSize=18, symbolBrush=(221,221,34), symbolPen=(221,221,34),symbol='star')
+        elif point == 3:
+            self.PriceW.pw2.plot(x=sellx, y=selly, symbolSize=18, symbolBrush=(179,158,77), symbolPen=(179,158,77),symbol='star')
+
+
     # ----------------------------------------------------------------------
     # 判断包含关系，仿照聚框，合并K线数据
     def judgeInclude(self):
@@ -724,43 +885,40 @@ class ChanlunEngineManager(QtGui.QWidget):
         temp_data = k_data[:1]
         zoushi = [3]  # 3-持平 4-向下 5-向上
         for i in xrange(len(k_data)):
-            case1_1 = temp_data.high[-1] > k_data.high[i] and temp_data.low[-1] < k_data.low[i]  # 第1根包含第2根
-            case1_2 = temp_data.high[-1] > k_data.high[i] and temp_data.low[-1] == k_data.low[i]  # 第1根包含第2根
-            case1_3 = temp_data.high[-1] == k_data.high[i] and temp_data.low[-1] < k_data.low[i]  # 第1根包含第2根
-            case2_1 = temp_data.high[-1] < k_data.high[i] and temp_data.low[-1] > k_data.low[i]  # 第2根包含第1根
-            case2_2 = temp_data.high[-1] < k_data.high[i] and temp_data.low[-1] == k_data.low[i]  # 第2根包含第1根
-            case2_3 = temp_data.high[-1] == k_data.high[i] and temp_data.low[-1] > k_data.low[i]  # 第2根包含第1根
+            case1 = temp_data.high[-1] >= k_data.high[i] and temp_data.low[-1] <= k_data.low[i]  # 第1根包含第2根
+            case2 = temp_data.high[-1] <= k_data.high[i] and temp_data.low[-1] >= k_data.low[i]  # 第2根包含第1根
             case3 = temp_data.high[-1] == k_data.high[i] and temp_data.low[-1] == k_data.low[i]  # 第1根等于第2根
             case4 = temp_data.high[-1] > k_data.high[i] and temp_data.low[-1] > k_data.low[i]  # 向下趋势
             case5 = temp_data.high[-1] < k_data.high[i] and temp_data.low[-1] < k_data.low[i]  # 向上趋势
-            if case1_1 or case1_2 or case1_3:
+            if case3:
+                zoushi.append(3)
+                continue
+            elif case1:
                 print temp_data
                 if zoushi[-1] == 4:
-                    temp_data.iloc[0, 4] = k_data.high[i]
+                    temp_data.ix[0, 4] = k_data.high[i]  #向下走取高点的低点
                 else:
-                    temp_data.iloc[0, 3] = k_data.low[i]
+                    temp_data.ix[0, 3] = k_data.low[i]   #向上走取低点的高点
 
-            elif case2_1 or case2_2 or case2_3:
+            elif case2:
                 temp_temp = temp_data[-1:]
                 temp_data = k_data[i:i + 1]
                 if zoushi[-1] == 4:
-                    temp_data.iloc[0, 4] = temp_temp.high[0]
+                    temp_data.ix[0, 4] = temp_temp.high[0]
                 else:
-                    temp_data.iloc[0, 3] = temp_temp.low[0]
-
-            elif case3:
-                zoushi.append(3)
-                pass
+                    temp_data.ix[0, 3] = temp_temp.low[0]
 
             elif case4:
                 zoushi.append(4)
                 after_fenxing = pd.concat([after_fenxing, temp_data], axis=0)
                 temp_data = k_data[i:i + 1]
 
+
             elif case5:
                 zoushi.append(5)
                 after_fenxing = pd.concat([after_fenxing, temp_data], axis=0)
                 temp_data = k_data[i:i + 1]
+
         return after_fenxing
 
     # ----------------------------------------------------------------------
@@ -964,7 +1122,7 @@ class PriceWidget(QtGui.QWidget):
     def initplotKline(self):
         """Kline"""
         s = self.data.index  #横坐标值
-        print 'self.axistime', s
+        print "numbers of KLine: ", len(s)
         xdict = dict(enumerate(s))
         self.__axisTime = MyStringAxis(xdict, orientation='bottom')
         self.pw2 = pg.PlotWidget(axisItems={'bottom': self.__axisTime})  # K线图
