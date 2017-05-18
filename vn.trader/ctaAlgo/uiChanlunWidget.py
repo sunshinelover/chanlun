@@ -81,12 +81,11 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.zhongShuType = [] #中枢的方向
         # 金融图
         self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
-        self.TickW = TickWidget(self.eventEngine, self.chanlunEngine)
+        self.TickW = None
 
         # MongoDB数据库相关
         self.__mongoConnected = False
         self.__mongoConnection = None
-        self.__mongoTickDB = None
 
         # 调用函数
         self.__connectMongo()
@@ -183,7 +182,7 @@ class ChanlunEngineManager(QtGui.QWidget):
         # unit为int型获取分钟数据，为String类型获取日周月K线数据
         if type(unit) is types.IntType:
             #从通联数据端获取当日分钟数据并存入数据库
-            # historyDataEngine.downloadFuturesIntradayBar(symbol, unit)
+            historyDataEngine.downloadFuturesIntradayBar(symbol, unit)
             # 从数据库获取前几天的分钟数据
             cx = self.getDbData(symbol, unit)
             if cx:
@@ -227,21 +226,17 @@ class ChanlunEngineManager(QtGui.QWidget):
         #周六周日不交易，无分钟数据
         # 给数据库命名
         dbname = ''
-        days = 2
+        days = 7
         if unit == 1:
             dbname = MINUTE_DB_NAME
-            days = 7
         elif unit == 5:
             dbname = MINUTE5_DB_NAME
         elif unit == 15:
             dbname = MINUTE15_DB_NAME
-            days = 7
         elif unit == 30:
             dbname = MINUTE30_DB_NAME
-            days = 7
         elif unit == 60:
             dbname = MINUTE60_DB_NAME
-            days = 7
 
         weekday = datetime.now().weekday()  # weekday() 返回的是0-6是星期一到星期日
         if days == 2:
@@ -269,50 +264,54 @@ class ChanlunEngineManager(QtGui.QWidget):
         instrumentid = str(self.codeEdit.text())
 
         self.chanlunEngine.writeChanlunLog(u'查询合约%s' % (instrumentid))
-        self.chanlunEngine.writeChanlunLog(u'打开合约%s 1分钟K线图' % (instrumentid))
 
         # 从通联数据客户端获取当日分钟数据
         self.data = self.downloadData(instrumentid, 1)
 
-        if self.tickLoaded:
-            self.vbox1.removeWidget(self.TickW)
-            self.TickW.deleteLater()
+        if self.data.empty:
+            self.chanlunEngine.writeChanlunLog(u'合约%s 不存在' % (instrumentid))
         else:
-            self.vbox1.removeWidget(self.PriceW)
-            self.PriceW.deleteLater()
+            if self.tickLoaded:
+                self.vbox1.removeWidget(self.TickW)
+                self.TickW.deleteLater()
+            else:
+                self.vbox1.removeWidget(self.PriceW)
+                self.PriceW.deleteLater()
 
-        self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
-        self.vbox1.addWidget(self.PriceW)
-        # 画K线图
-        self.PriceW.plotHistorticData()
+            self.PriceW = PriceWidget(self.eventEngine, self.chanlunEngine, self.data)
+            self.vbox1.addWidget(self.PriceW)
+            # 画K线图
+            self.PriceW.plotHistorticData()
 
-        self.penLoaded = False
-        self.segmentLoaded = False
-        self.tickLoaded = False
-        self.zhongShuLoaded = False
+            self.chanlunEngine.writeChanlunLog(u'打开合约%s 1分钟K线图' % (instrumentid))
 
-        # # 订阅合约[仿照ctaEngine.py写的]
-        # # 先取消订阅之前的合约，再订阅最新输入的合约
-        # contract = self.mainEngine.getContract(self.instrumentid)
-        # if contract:
-        #     req = VtSubscribeReq()
-        #     req.symbol = contract.symbol
-        #     self.mainEngine.unsubscribe(req, contract.gatewayName)
-        #
-        #     contract = self.mainEngine.getContract(instrumentid)
-        #     if contract:
-        #         req = VtSubscribeReq()
-        #         req.symbol = contract.symbol
-        #         self.mainEngine.subscribe(req, contract.gatewayName)
-        #     else:
-        #         self.chanlunEngine.writeChanlunLog(u'交易合约%s无法找到' % (instrumentid))
-        #
-        # # 重新注册事件监听
-        # self.eventEngine.unregister(EVENT_TICK + self.instrumentid, self.signal.emit)
-        # self.eventEngine.register(EVENT_TICK + instrumentid, self.signal.emit)
+            self.penLoaded = False
+            self.segmentLoaded = False
+            self.tickLoaded = False
+            self.zhongShuLoaded = False
 
-        # 更新目前的合约
-        self.instrumentid = instrumentid
+            # # 订阅合约[仿照ctaEngine.py写的]
+            # # 先取消订阅之前的合约，再订阅最新输入的合约
+            # contract = self.mainEngine.getContract(self.instrumentid)
+            # if contract:
+            #     req = VtSubscribeReq()
+            #     req.symbol = contract.symbol
+            #     self.mainEngine.unsubscribe(req, contract.gatewayName)
+            #
+            #     contract = self.mainEngine.getContract(instrumentid)
+            #     if contract:
+            #         req = VtSubscribeReq()
+            #         req.symbol = contract.symbol
+            #         self.mainEngine.subscribe(req, contract.gatewayName)
+            #     else:
+            #         self.chanlunEngine.writeChanlunLog(u'交易合约%s无法找到' % (instrumentid))
+            #
+            # # 重新注册事件监听
+            # self.eventEngine.unregister(EVENT_TICK + self.instrumentid, self.signal.emit)
+            # self.eventEngine.register(EVENT_TICK + instrumentid, self.signal.emit)
+
+            # 更新目前的合约
+            self.instrumentid = instrumentid
 
     def oneM(self):
         "打开1分钟K线图"
@@ -532,57 +531,6 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.zhongShuLoaded = False
 
     # ----------------------------------------------------------------------
-    def shop(self):
-        """加载买卖点"""
-        if not self.zhongShuLoaded:
-            self.zhongShu()
-        i = 0
-        while i < len(self.zhongshuPos) - 2:
-            startPos, endPos = self.zhongshuPos[i], self.zhongshuPos[i+1]   #中枢开始段的位置和结束段的位置
-
-            if endPos+1 == len(self.fenY):
-                break
-            startY = self.fenY[startPos+1] - self.fenY[startPos]   #开始段Y轴距离
-            startX = self.fenX[startPos+1] - self.fenX[startPos]   #开始段X轴距离
-            startK = abs(startY * startX)  #开始段投影面积
-
-            endY = self.fenY[endPos + 1] - self.fenY[endPos]  # 结束段Y轴距离
-            endX = self.fenX[endPos + 1] - self.fenX[endPos]  # 结束段段X轴距离
-            endK = abs(endY * endX)  # 开始段投影面积
-
-            if endK < startK:
-                print startPos, endPos
-                if self.zhongShuType[i/2] == 1 and self.zhongShuType[i/2 + 1] == -1:
-                    #一卖
-                    self.sellpoint([self.fenX[endPos + 1]], [self.fenY[endPos + 1]], 1)
-                    #二卖，一卖后一个顶点
-                    if endPos < len(self.fenX) - 3:
-                        self.sellpoint([self.fenX[endPos + 3]], [self.fenY[endPos + 3]], 2)
-                    #三卖，一卖之后中枢结束段的第一个顶
-                    if i < len(self.zhongshuPos) - 3:
-                        nextPos = self.zhongshuPos[i+3]  #下一个中枢结束位置
-                        if self.fenY[nextPos+1] > self.fenY[nextPos]:
-                            self.sellpoint([self.fenX[nextPos + 1]], [self.fenY[nextPos + 1]], 3)
-                        else:
-                            self.sellpoint([self.fenX[nextPos]], [self.fenY[nextPos]], 3)
-                elif self.zhongShuType[i/2] == -1 and self.zhongShuType[i/2 + 1] == 1:
-                    #一买
-                    self.buypoint([self.fenX[endPos + 1]], [self.fenY[endPos + 1]], 1)
-                    # 二买，一买后一个底点
-                    if endPos < len(self.fenX) - 3:
-                        self.buypoint([self.fenX[endPos + 3]], [self.fenY[endPos + 3]], 2)
-                    # 三买，一买之后中枢结束段的第一个顶
-                    if i < len(self.zhongshuPos) - 3:
-                        nextPos = self.zhongshuPos[i + 3]  # 下一个中枢结束位置
-                        if self.fenY[nextPos + 1] < self.fenY[nextPos]:
-                            self.buypoint([self.fenX[nextPos + 1]], [self.fenY[nextPos + 1]], 3)
-                        else:
-                            self.buypoint([self.fenX[nextPos]], [self.fenY[nextPos]], 3)
-
-            i = i+2
-
-        self.chanlunEngine.writeChanlunLog(u'买卖点加载成功')
-    # ----------------------------------------------------------------------
     def restore(self):
         """还原初始k线状态"""
         self.chanlunEngine.writeChanlunLog(u'还原加载成功')
@@ -772,9 +720,9 @@ class ChanlunEngineManager(QtGui.QWidget):
         self.zhongshuPos = []  # 记录所有的中枢开始段和结束段的位置
         self.zhongShuType = [] #记录所有中枢的方向
         while i < len(self.fenX) - 4:
-            if (self.fenY[i] > self.fenY[i + 1] and self.fenY[i + 1] < self.fenY[i + 4]):
+            if (self.fenY[i] > self.fenY[i + 1] and self.fenY[i + 1] < self.fenY[i + 4]): #判断进入段方向
                 temp_low = max(self.fenY[i + 1], self.fenY[i + 3])
-                temp_high = min(self.fenY[i + 2], self.fenY[i + 4])
+                temp_high = min(self.fenY[i + 2], self.fenY[i + 4])   #记录中枢内顶的最小值与底的最大值
                 minX = self.fenX[i+1]
                 self.zhongshuPos.append(i)
                 self.zhongShuType.append(-1)
@@ -848,6 +796,56 @@ class ChanlunEngineManager(QtGui.QWidget):
 
         self.zhongShuLoaded = True
         self.chanlunEngine.writeChanlunLog(u'走势中枢加载成功')
+
+     # ----------------------------------------------------------------------
+    def shop(self):
+        """加载买卖点"""
+        if not self.zhongShuLoaded:
+            self.zhongShu()
+        i = 0
+        while i < len(self.zhongShuType) - 1:
+            startPos, endPos = self.zhongshuPos[2*i], self.zhongshuPos[2*i + 1]  # 中枢开始段的位置和结束段的位置
+
+            startY = self.fenY[startPos + 1] - self.fenY[startPos]  # 开始段Y轴距离
+            startX = self.fenX[startPos + 1] - self.fenX[startPos]  # 开始段X轴距离
+            startK = abs(startY * startX)  # 开始段投影面积
+
+            endY = self.fenY[endPos + 1] - self.fenY[endPos]  # 结束段Y轴距离
+            endX = self.fenX[endPos + 1] - self.fenX[endPos]  # 结束段段X轴距离
+            endK = abs(endY * endX)  # 开始段投影面积
+
+            if endK < startK:
+                print startPos, endPos
+                if self.zhongShuType[i] == 1 and self.zhongShuType[i + 1] == -1:
+                    # 一卖
+                    self.sellpoint([self.fenX[endPos + 1]], [self.fenY[endPos + 1]], 1)
+                    # 二卖，一卖后一个顶点
+                    self.sellpoint([self.fenX[endPos + 3]], [self.fenY[endPos + 3]], 2)
+                    # 三卖，一卖之后中枢结束段的第一个顶
+                    i = i + 1
+                    nextPos = self.zhongshuPos[2*i + 1]  # 下一个中枢结束位置
+                    if nextPos + 1 < len(self.fenY):
+                        if self.fenY[nextPos + 1] > self.fenY[nextPos]:
+                            self.sellpoint([self.fenX[nextPos + 1]], [self.fenY[nextPos + 1]], 3)
+                        else:
+                            self.sellpoint([self.fenX[nextPos]], [self.fenY[nextPos]], 3)
+                elif self.zhongShuType[i] == -1 and self.zhongShuType[i + 1] == 1:
+                    # 一买
+                    self.buypoint([self.fenX[endPos + 1]], [self.fenY[endPos + 1]], 1)
+                    # 二买，一买后一个底点
+                    self.buypoint([self.fenX[endPos + 3]], [self.fenY[endPos + 3]], 2)
+                    # 三买，一买之后中枢结束段的第一个顶
+                    i = i + 1
+                    nextPos = self.zhongshuPos[2*i + 1]  # 下一个中枢结束位置
+                    if nextPos + 1 < len(self.fenY):
+                        if self.fenY[nextPos + 1] < self.fenY[nextPos]:
+                            self.buypoint([self.fenX[nextPos + 1]], [self.fenY[nextPos + 1]], 3)
+                        else:
+                            self.buypoint([self.fenX[nextPos]], [self.fenY[nextPos]], 3)
+
+            i = i + 1           # 接着判断之后的中枢是否出现背驰
+
+        self.chanlunEngine.writeChanlunLog(u'买卖点加载成功')
     # ----------------------------------------------------------------------
     def fenbi(self, fenbix, fenbiy):
         self.PriceW.pw2.plotItem.plot(x=fenbix, y=fenbiy, pen=QtGui.QPen(QtGui.QColor(255, 236, 139)))
@@ -1095,12 +1093,11 @@ class PriceWidget(QtGui.QWidget):
         self.initCompleted = False
 
         self.__eventEngine = eventEngine
-        self.__mainEngine = chanlunEngine
+        self.__chanlunEngine = chanlunEngine
         self.data = data  #画图所需数据
         # MongoDB数据库相关
         self.__mongoConnected = False
         self.__mongoConnection = None
-        self.__mongoTickDB = None
 
         # 调用函数
         self.__connectMongo()
@@ -1300,7 +1297,6 @@ class PriceWidget(QtGui.QWidget):
         try:
             self.__mongoConnection = pymongo.MongoClient("localhost", 27017)
             self.__mongoConnected = True
-            self.__mongoTickDB = self.__mongoConnection['VnTrader_Tick_Db']
             self.__mongoMinDB = self.__mongoConnection['VnTrader_1Min_Db']
         except ConnectionFailure:
             pass
@@ -1374,11 +1370,11 @@ class TickWidget(QtGui.QWidget):
         super(TickWidget, self).__init__(parent)
 
         self.__eventEngine = eventEngine
-        self.__mainEngine = chanlunEngine
-        # # MongoDB数据库相关
-        # self.__mongoConnected = False
-        # self.__mongoConnection = None
-        # self.__mongoTickDB = None
+        self.__chanlunEngine = chanlunEngine
+        # MongoDB数据库相关
+        self.__mongoConnected = False
+        self.__mongoConnection = None
+        self.__mongoTickDB = None
 
         # 调用函数
         self.initUi()
@@ -1532,6 +1528,7 @@ class TickWidget(QtGui.QWidget):
         tick.askVolume5 = data['AskVolume5']
 
         self.onTick(tick)  # tick数据更新
+        self.__recordTick(tick)  #记录Tick数据
 
     #----------------------------------------------------------------------
     def onTick(self, tick):
@@ -1579,24 +1576,23 @@ class TickWidget(QtGui.QWidget):
         self.plotTick()  # tick图
 
     #----------------------------------------------------------------------
-    # def __connectMongo(self):
-    #     """连接MongoDB数据库"""
-    #     try:
-    #         self.__mongoConnection = pymongo.MongoClient("localhost", 27017)
-    #         self.__mongoConnected = True
-    #         self.__mongoTickDB = self.__mongoConnection['VnTrader_Tick_Db']
-    #         self.__mongoMinDB = self.__mongoConnection['VnTrader_1Min_Db']
-    #     except ConnectionFailure:
-    #         pass
-    #
-    # #----------------------------------------------------------------------
-    # def __recordTick(self, data):
-    #     """将Tick数据插入到MongoDB中"""
-    #     if self.__mongoConnected:
-    #         symbol = data['InstrumentID']
-    #         data['date'] = self.today
-    #         self.__mongoTickDB[symbol].insert(data)
-    #
+    def __connectMongo(self):
+        """连接MongoDB数据库"""
+        try:
+            self.__mongoConnection = pymongo.MongoClient("localhost", 27017)
+            self.__mongoConnected = True
+            self.__mongoTickDB = self.__mongoConnection['VnTrader_Tick_Db']
+        except ConnectionFailure:
+            pass
+
+    #----------------------------------------------------------------------
+    def __recordTick(self, data):
+        """将Tick数据插入到MongoDB中"""
+        if self.__mongoConnected:
+            symbol = data['InstrumentID']
+            data['date'] = datetime.now().strftime('%Y%m%d')
+            self.__mongoTickDB[symbol].insert(data)
+
     # #----------------------------------------------------------------------
     # def loadTick(self, symbol, startDate, endDate=None):
     #     """从MongoDB中读取Tick数据"""

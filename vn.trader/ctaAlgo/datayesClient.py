@@ -40,11 +40,11 @@ class DatayesClient(object):
         try:
             self.domain = str("http://api.wmcloud.com/data")
             self.version = str("v1")
-            self.token = str("04c44e7544204a229ccc0b01321d2c8fad43a02a8ee3831d709425a474aea924")
+            self.token = str("2fdd1aeff5c949a5880ddba21903c45fb3da7755224f9442848b4a20231c988b")
         except KeyError:
             print u'%s配置文件字段缺失' % self.name
             return
-        
+
         self.header['Connection'] = 'keep_alive'
         self.header['Authorization'] = 'Bearer ' + self.token
         self.settingLoaded = True
@@ -68,9 +68,8 @@ class DatayesClient(object):
                 return None
             else:
                 result = r.json()
-                # print u'通联数据接口返回值: ', result
                 # if 'retCode' in result and result['retMsg'] == 'Success':
-                if 'retCode' in result:
+                if 'data' in result:
                     #通联数据客户端分钟行情与日周月行情返回值格式有区别
                     #分钟行情返回值在data的barBodys值中
                     if 'barBodys'in result['data'][0]:
